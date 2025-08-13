@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Generar Factura — Tema Oscuro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0b1220;        /* fondo principal */
+      --panel:#111827;     /* tarjetas/paneles */
+      --muted:#94a3b8;     /* texto secundario */
+      --text:#e5e7eb;      /* texto principal */
+      --accent:#22d3ee;    /* acento (teal) */
+      --accent-2:#60a5fa;  /* acento secundario (azul) */
+      --border:#1f2937;    /* bordes */
+      --success:#10b981;   /* éxito */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:radial-gradient(1200px 800px at 10% -10%, #16213a 0%, var(--bg) 45%),
+                        radial-gradient(1000px 600px at 120% 0%, #0f172a 0%, transparent 50%) , var(--bg);
+      color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      line-height:1.45;
+    }
+    .container{max-width:880px; margin:40px auto; padding:0 16px;}
+    .header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;
+    }
+    .title{font-size:1.25rem; font-weight:700; letter-spacing:.3px}
+    .badge{
+      font-size:.8rem; padding:6px 10px; border-radius:999px; background:rgba(34,211,238,.1); color:var(--accent);
+      border:1px solid rgba(34,211,238,.25);
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00));
+      border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      backdrop-filter:saturate(120%) blur(6px);
+    }
+    label{display:block; font-weight:600; margin-bottom:8px; color:#cbd5e1}
+    textarea{
+      width:100%; min-height:160px; color:var(--text); background:#0b1324; border:1px solid var(--border);
+      border-radius:12px; padding:12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      resize:vertical; outline:none;
+    }
+    textarea:focus{border-color:#334155; box-shadow:0 0 0 3px rgba(96,165,250,.15)}
+    .row{display:flex; gap:12px; flex-wrap:wrap; margin-top:14px}
+    .btn{
+      appearance:none; border:1px solid var(--border); background:#0b1324; color:var(--text);
+      padding:12px 16px; border-radius:12px; font-weight:700; letter-spacing:.2px; cursor:pointer;
+      transition: transform .04s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .btn:hover{border-color:#334155; box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    .btn:active{transform:translateY(1px)}
+    .btn.local1{background: linear-gradient(180deg, rgba(34,211,238,.15), rgba(34,211,238,.05)); border-color: rgba(34,211,238,.35)}
+    .btn.local2{background: linear-gradient(180deg, rgba(96,165,250,.15), rgba(96,165,250,.05)); border-color: rgba(96,165,250,.35)}
+    .hint{color:var(--muted); font-size:.95rem; margin-top:8px}
+    .examples{margin-top:18px; display:grid; grid-template-columns:1fr; gap:14px}
+    .example{
+      border:1px dashed #243244; border-radius:12px; padding:14px; background:#0b1324;
+    }
+    .example h3{margin:0 0 8px 0; font-size:1rem; color:#cbd5e1}
+    code.block{
+      display:block; background:#0b1324; border:1px solid var(--border);
+      border-radius:10px; padding:10px 12px; color:#d1d5db; white-space:pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    .footer{margin-top:22px; display:flex; gap:10px; align-items:center; color:#9ca3af; font-size:.9rem}
+    .dot{width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 10px rgba(16,185,129,.8)}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">Generar Factura</div>
+      <span class="badge">Tema oscuro</span>
+    </div>
+
+    <div class="card">
+      <form action="/generar_desde_texto" method="POST" target="_blank" id="facturaForm">
+        <label for="mensaje">Mensaje</label>
+        <textarea id="mensaje" name="mensaje" spellcheck="false"></textarea>
+
+        <!-- Campo oculto que decidirá Local 1 (A) o Local 2 (B) -->
+        <input type="hidden" name="plantilla" id="plantilla" value="A" />
+
+        <div class="row">
+          <button class="btn local1" onclick="setPlantilla(event,'A')">Local 1</button>
+          <button class="btn local2" onclick="setPlantilla(event,'B')">Local 2</button>
+        </div>
+
+        <p class="hint">El PDF se abrirá en una pestaña nueva. Puedes editar el texto antes de elegir el local.</p>
+
+        <div class="examples">
+          <div class="example">
+            <h3>Ejemplo de formato con productos (solo referencia)</h3>
+            <code class="block">CLIENTE Maria López
+ESTADO Pagado
+FECHA 12/08/2025
+2 calcetas deportivas a 25
+1 pantalon nike a 200</code>
+          </div>
+        </div>
+
+        <div class="footer">
+          <span class="dot"></span>
+          <span>Listo para generar: completa tus datos y selecciona el local.</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+  // Prefill sin productos (con saltos de línea reales)
+  (function prefill(){
+    const textarea = document.getElementById('mensaje');
+    if (!textarea.value.trim()) {
+      // Opción 1: usando \n
+      textarea.value = ['CLIENTE CLIENTE','ESTADO ESTADO','FECHA HOY'].join('\n');
+
+      // Opción 2 (equivalente y más legible):
+      // textarea.value = `CLIENTE CLIENTE
+      // ESTADO ESTADO
+      // FECHA HOY`;
+    }
+  })();
+
+  // Establece la plantilla y envía el formulario
+  function setPlantilla(evt, tipo){
+    evt.preventDefault();
+    document.getElementById('plantilla').value = tipo; // "A" = Local 1, "B" = Local 2
+    document.getElementById('facturaForm').submit();
+  }
+</script>
+
+</body>
+</html>
