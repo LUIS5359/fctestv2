@@ -1,160 +1,158 @@
-import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.utils import ImageReader, simpleSplit
+from flask import Flask, request, send_file, render_template
+from generar_factura import generar_factura_A, generar_factura_B
+from datetime import datetime
+import re
+import os
 
-# =========================
-# CONFIGURACIÓN DE TEMAS
-# =========================
-# Cambia aquí para modificar colores/datos de contacto por plantilla.
-THEMES = {
-    "A": {
-        "title": "Kim's Sports",
-        "primary": colors.HexColor("#003366"),  # azul principal
-        "accent":  colors.HexColor("#666666"),  # subtítulos (fecha/cliente/estado)
-        "note":    colors.HexColor("#444444"),  # nota inferior
-        "line":    colors.HexColor("#333333"),  # líneas divisorias
-        "address": "0Av Zona 2, San Francisco El Alto Totonicapan a 150 mts. del entronque",
-        "phone":   "3256-6671 o 3738-5499",
-        "logo":    "static/logo.png",           # opcional (puede no existir)
-    },
-    "B": {
-        "title": "Kim's Sports",
-        # --- Elige UNA paleta (descomenta la que te guste) ---
-        # Teal & Slate (moderna/pro)
-        "primary": colors.HexColor("#0F766E"),
-        "accent":  colors.HexColor("#14B8A6"),
-        "note":    colors.HexColor("#475569"),
-        "line":    colors.HexColor("#334155"),
-        # Sage & Charcoal (sobria/elegante)
-        # "primary": colors.HexColor("#115E59"),
-        # "accent":  colors.HexColor("#84CC16"),
-        # "note":    colors.HexColor("#334155"),
-        # "line":    colors.HexColor("#374151"),
-        # Forest & Gold (premium)
-        # "primary": colors.HexColor("#065F46"),
-        # "accent":  colors.HexColor("#D97706"),
-        # "note":    colors.HexColor("#374151"),
-        # "line":    colors.HexColor("#4B5563"),
+# from flask_cors import CORS  # si sirves HTML desde otro dominio
+app = Flask(__name__, static_folder="static", template_folder="templates")
+# CORS(app)
 
-        "address": "1a. Calle Barrio Xolve, 1 cuadra debajo de banco Banrural, Salida a Momostenango. San Francisco Totonicapan.",
-        "phone":   "4654-6282",
-        "logo":    "static/logo_b.png",         # puede ser el mismo que A
-    },
+CANTIDAD_MAP = {
+    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+    "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+    "dieciséis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
+    "veinte": 20, "veintiuno": 21, "veintidós": 22, "veintitrés": 23,
+    "veinticuatro": 24, "veinticinco": 25, "veintiséis": 26, "veintisiete": 27,
+    "veintiocho": 28, "veintinueve": 29, "treinta": 30, "treinta y uno": 31,
+    "cuarenta": 40, "cincuenta": 50, "sesenta": 60, "setenta": 70,
+    "ochenta": 80, "noventa": 90, "cien": 100
 }
 
-# =========================
-# Utilidades de dibujo
-# =========================
-def _cap(s):
-    return s[0].upper() + s[1:] if s else s
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-def _try_logo(c, path, x=40, y=720, w=80, h=80):
+def _safe_nombre_cliente(nombre: str) -> str:
+    """
+    Normaliza el nombre para usarlo en el filename:
+    - trim
+    - espacios -> guiones bajos
+    - elimina caracteres inválidos para nombres de archivo
+    """
+    nombre = (nombre or "").strip()
+    if not nombre:
+        return "Cliente"
+    nombre = nombre.replace(" ", "_")
+    nombre = re.sub(r'[\\/:*?"<>|]+', "", nombre)
+    return nombre or "Cliente"
+
+@app.route("/generar_desde_texto", methods=["POST"])
+def generar_desde_texto():
+    mensaje = request.form.get("mensaje")
+    plantilla = (request.form.get("plantilla") or "A").upper()
+    if not mensaje:
+        return "❌ No se recibió el texto", 400
+
     try:
-        if path:
-            img = ImageReader(path)
-            c.drawImage(img, x, y, width=w, height=h, mask='auto')
-    except Exception:
-        pass
+        cliente, estado, fecha, productos = parsear_mensaje(mensaje)
+        if not productos:
+            return "❌ No se encontraron productos válidos.", 400
 
-def _encabezado(c, theme):
+        productos.sort(key=lambda x: x[1].lower())
+        fecha_valida = procesar_fecha(fecha)  # dd/mm/YYYY
+
+        if plantilla == "B":
+            pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos)
+        else:
+            pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos)
+
+        # === Nombre de salida: [CLIENTE]_Comprobante[FECHA].pdf ===
+        cliente_safe = _safe_nombre_cliente(cliente)
+        fecha_filename = fecha_valida.replace("/", "-")  # dd-mm-YYYY
+        filename = f"{cliente_safe}_Comprobante{fecha_filename}.pdf"
+
+        return send_file(
+            pdf_stream,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print("Error /generar_desde_texto:", e, flush=True)
+        return f"❌ Error al procesar el mensaje: {e}", 500
+
+
+def parsear_mensaje(mensaje):
     """
-    Dibuja logo, título y contacto según theme.
+    Formato:
+      cliente <nombre> estado <texto> fecha <dd/mm/yyyy|hoy> <cantidad> <descripcion...> a <precio> ...
     """
-    _try_logo(c, theme.get("logo"))
-    c.setFont("Helvetica-Bold", 16)
-    c.setFillColor(theme["primary"])
-    c.drawString(150, 770, theme.get("title", ""))
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
-    c.drawString(150, 750, f"Dirección: {theme.get('address','')}")
-    c.drawString(150, 735, f"Teléfono: {theme.get('phone','')}")
+    tokens = mensaje.strip().split()
+    cliente, estado, fecha = "", "", ""
+    productos = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i].lower()
 
-def _datos_factura(c, theme, fecha, cliente, estado):
-    c.setFont("Helvetica-Bold", 10)
-    c.setFillColor(theme["accent"])
-    c.drawString(50, 700, f"FECHA: {fecha}")
-    c.drawString(50, 685, f"CLIENTE: {cliente}")
-    c.drawString(50, 670, f"ESTADO: {estado}")
-    c.setFillColor(colors.black)
+        if token == "cliente":
+            i, cliente = leer_seccion(tokens, i + 1, ["estado", "fecha"])
 
-def _cabecera_tabla(c, y, theme):
-    c.setFont("Helvetica-Bold", 10)
-    c.setFillColor(theme["primary"])
-    c.drawString(50, y, "DESCRIPCIÓN")
-    c.drawString(250, y, "CANTIDAD")
-    c.drawString(350, y, "PRECIO")
-    c.drawString(450, y, "TOTAL")
-    c.setStrokeColor(theme["primary"])
-    c.setLineWidth(1)
-    c.line(50, y - 5, 500, y - 5)
+        elif token == "estado":
+            i += 1
+            if i < len(tokens):
+                estado = tokens[i]
+                i += 1
 
-def _filas(c, y, theme, productos):
-    c.setFont("Helvetica", 10)
-    total_factura = 0
-    for cantidad, descripcion, precio, total in productos:
-        if y < 100:
-            c.showPage()
-            y = 750
-        desc_lines = simpleSplit(_cap(descripcion), "Helvetica", 10, 180)
-        for idx, line in enumerate(desc_lines):
-            c.setFillColor(colors.black)
-            c.drawString(50, y, line)
-            if idx == 0:
-                c.drawRightString(300, y, str(cantidad))
-                c.drawRightString(420, y, f"Q {precio:.2f}")
-                c.drawRightString(500, y, f"Q {total:.2f}")
-            y -= 18
-        c.setStrokeColor(theme["line"])
-        c.setLineWidth(0.8)
-        c.line(50, y + 10, 500, y + 10)
-        c.setLineWidth(0.5)
-        total_factura += total
-    return y, total_factura
+        elif token == "fecha":
+            i += 1
+            if i < len(tokens):
+                fecha = tokens[i]
+                i += 1
 
-def _totales_y_nota(c, y, theme, total_factura):
-    if y < 120:
-        c.showPage()
-        y = 750
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(theme["primary"])
-    c.drawString(350, y - 10, "TOTAL:")
-    c.drawRightString(500, y - 10, f"Q {total_factura:,.2f}")
-    c.line(350, y - 15, 500, y - 15)
+        elif re.match(r"^\d+$", token) or token in CANTIDAD_MAP:
+            cantidad = int(token) if token.isdigit() else CANTIDAD_MAP.get(token, 1)
+            i += 1
 
-    c.setFont("Times-Italic", 11)
-    c.setFillColor(theme["note"])
-    c.drawString(50, y - 50, "(Factura no contable con fines informativos.)")
-    c.drawString(50, y - 65, "¡Gracias por su compra, vuelva pronto!")
+            desc_parts = []
+            while i < len(tokens) and tokens[i].lower() != "a":
+                desc_parts.append(tokens[i])
+                i += 1
 
-# =========================
-# Generadores
-# =========================
-def generar_factura(cliente, estado, fecha, productos, tema="A"):
-    """
-    Generador genérico. Cambia 'tema' a 'A' o 'B' (o agrega más en THEMES).
-    """
-    theme = THEMES.get(tema.upper(), THEMES["A"])
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
+            if i < len(tokens) and tokens[i].lower() == "a":
+                i += 1
 
-    _encabezado(c, theme)
-    _datos_factura(c, theme, fecha, cliente, estado)
+            precio = 0.0
+            if i < len(tokens):
+                raw = tokens[i].replace(",", ".")
+                try:
+                    precio = float(raw)
+                except:
+                    precio = 0.0
+                i += 1
 
-    y = 640
-    _cabecera_tabla(c, y, theme)
-    y -= 20
+            descripcion = " ".join(desc_parts).strip()
+            total = cantidad * precio
+            if descripcion:
+                productos.append([cantidad, descripcion, precio, total])
 
-    y, total_factura = _filas(c, y, theme, productos)
-    _totales_y_nota(c, y, theme, total_factura)
+        else:
+            i += 1
 
-    c.save()
-    buffer.seek(0)
-    return buffer
+    return cliente, estado, fecha, productos
 
-def generar_factura_A(cliente, estado, fecha, productos):
-    return generar_factura(cliente, estado, fecha, productos, tema="A")
 
-def generar_factura_B(cliente, estado, fecha, productos):
-    return generar_factura(cliente, estado, fecha, productos, tema="B")
+def leer_seccion(tokens, start_index, stop_words):
+    partes = []
+    i = start_index
+    while i < len(tokens) and tokens[i].lower() not in stop_words:
+        partes.append(tokens[i])
+        i += 1
+    return i, " ".join(partes).strip()
+
+
+def procesar_fecha(fecha_str):
+    if not fecha_str:
+        return datetime.today().strftime("%d/%m/%Y")
+    if fecha_str.lower() == "hoy":
+        return datetime.today().strftime("%d/%m/%Y")
+    try:
+        return datetime.strptime(fecha_str, "%d/%m/%Y").strftime("%d/%m/%Y")
+    except:
+        return datetime.today().strftime("%d/%m/%Y")
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
