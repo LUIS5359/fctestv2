@@ -1,158 +1,189 @@
-from flask import Flask, request, send_file, render_template
-from generar_factura import generar_factura_A, generar_factura_B
-from datetime import datetime
-import re
-import os
+# generar_factura.py
+import io
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader, simpleSplit
 
-# from flask_cors import CORS  # si sirves HTML desde otro dominio
-app = Flask(__name__, static_folder="static", template_folder="templates")
-# CORS(app)
-
-CANTIDAD_MAP = {
-    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
-    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
-    "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
-    "dieciséis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
-    "veinte": 20, "veintiuno": 21, "veintidós": 22, "veintitrés": 23,
-    "veinticuatro": 24, "veinticinco": 25, "veintiséis": 26, "veintisiete": 27,
-    "veintiocho": 28, "veintinueve": 29, "treinta": 30, "treinta y uno": 31,
-    "cuarenta": 40, "cincuenta": 50, "sesenta": 60, "setenta": 70,
-    "ochenta": 80, "noventa": 90, "cien": 100
+# =========================
+# CONFIGURACIÓN DE TEMAS
+# =========================
+THEMES = {
+    "A": {
+        "title": "Kim's Sports",
+        "primary": colors.HexColor("#003366"),
+        "accent":  colors.HexColor("#666666"),
+        "note":    colors.HexColor("#444444"),
+        "line":    colors.HexColor("#333333"),
+        "address": "0Av Zona 2, San Francisco El Alto Totonicapan a 150 mts. del entronque",
+        "phone":   "3256-6671 o 3738-5499",
+        "logo":    "static/logo.png",
+    },
+    "B": {
+        "title": "Kim's Sports",
+        "primary": colors.HexColor("#0F766E"),
+        "accent":  colors.HexColor("#14B8A6"),
+        "note":    colors.HexColor("#475569"),
+        "line":    colors.HexColor("#334155"),
+        "address": "1a. Calle Barrio Xolve, 1 cuadra debajo de banco Banrural, Salida a Momostenango. San Francisco Totonicapán.",
+        "phone":   "4654-6282",
+        "logo":    "static/logo_b.png",
+    },
 }
 
-@app.route("/")
-def home():
-    return render_template("index.html")
+# =========================
+# Constantes de layout
+# =========================
+PAGE_WIDTH, PAGE_HEIGHT = letter
+_TEXT_X = 150
+_RIGHT_MARGIN = 36
+_MAX_TEXT_WIDTH = PAGE_WIDTH - _RIGHT_MARGIN - _TEXT_X  # ancho disponible a la derecha del logo
 
-def _safe_nombre_cliente(nombre: str) -> str:
-    """
-    Normaliza el nombre para usarlo en el filename:
-    - trim
-    - espacios -> guiones bajos
-    - elimina caracteres inválidos para nombres de archivo
-    """
-    nombre = (nombre or "").strip()
-    if not nombre:
-        return "Cliente"
-    nombre = nombre.replace(" ", "_")
-    nombre = re.sub(r'[\\/:*?"<>|]+', "", nombre)
-    return nombre or "Cliente"
+# =========================
+# Utilidades de dibujo
+# =========================
+def _cap(s):
+    return s[0].upper() + s[1:] if s else s
 
-@app.route("/generar_desde_texto", methods=["POST"])
-def generar_desde_texto():
-    mensaje = request.form.get("mensaje")
-    plantilla = (request.form.get("plantilla") or "A").upper()
-    if not mensaje:
-        return "❌ No se recibió el texto", 400
-
+def _try_logo(c, path, x=40, y=720, w=80, h=80):
     try:
-        cliente, estado, fecha, productos = parsear_mensaje(mensaje)
-        if not productos:
-            return "❌ No se encontraron productos válidos.", 400
+        if path:
+            img = ImageReader(path)
+            c.drawImage(img, x, y, width=w, height=h, mask='auto')
+    except Exception:
+        pass
 
-        productos.sort(key=lambda x: x[1].lower())
-        fecha_valida = procesar_fecha(fecha)  # dd/mm/YYYY
-
-        if plantilla == "B":
-            pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos)
-        else:
-            pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos)
-
-        # === Nombre de salida: [CLIENTE]_Comprobante[FECHA].pdf ===
-        cliente_safe = _safe_nombre_cliente(cliente)
-        fecha_filename = fecha_valida.replace("/", "-")  # dd-mm-YYYY
-        filename = f"{cliente_safe}_Comprobante{fecha_filename}.pdf"
-
-        return send_file(
-            pdf_stream,
-            mimetype="application/pdf",
-            as_attachment=True,
-            download_name=filename
-        )
-    except Exception as e:
-        print("Error /generar_desde_texto:", e, flush=True)
-        return f"❌ Error al procesar el mensaje: {e}", 500
-
-
-def parsear_mensaje(mensaje):
+def _draw_wrapped(c, text, x, y, width, font="Helvetica", size=10, leading=14, color=colors.black, max_lines=None):
     """
-    Formato:
-      cliente <nombre> estado <texto> fecha <dd/mm/yyyy|hoy> <cantidad> <descripcion...> a <precio> ...
+    Dibuja 'text' con salto de línea automático dentro de 'width'.
+    Devuelve la nueva coordenada y (la siguiente línea base disponible).
     """
-    tokens = mensaje.strip().split()
-    cliente, estado, fecha = "", "", ""
-    productos = []
-    i = 0
-    while i < len(tokens):
-        token = tokens[i].lower()
+    if not text:
+        return y
+    c.setFont(font, size)
+    c.setFillColor(color)
+    lines = simpleSplit(text, font, size, width)
+    if max_lines:
+        lines = lines[:max_lines]
+    for i, line in enumerate(lines):
+        c.drawString(x, y - i * leading, line)
+    return y - leading * len(lines)
 
-        if token == "cliente":
-            i, cliente = leer_seccion(tokens, i + 1, ["estado", "fecha"])
+def _encabezado(c, theme):
+    """
+    Dibuja logo, título y contacto según theme con salto de línea para textos largos.
+    """
+    _try_logo(c, theme.get("logo"))
 
-        elif token == "estado":
-            i += 1
-            if i < len(tokens):
-                estado = tokens[i]
-                i += 1
+    # Título
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColor(theme["primary"])
+    c.drawString(_TEXT_X, 770, theme.get("title", ""))
 
-        elif token == "fecha":
-            i += 1
-            if i < len(tokens):
-                fecha = tokens[i]
-                i += 1
+    # Datos de contacto con wrap
+    y = 750
+    c.setFillColor(colors.black)
 
-        elif re.match(r"^\d+$", token) or token in CANTIDAD_MAP:
-            cantidad = int(token) if token.isdigit() else CANTIDAD_MAP.get(token, 1)
-            i += 1
+    # Dirección (si es muy larga, baja a 9pt)
+    dir_text = f"Dirección: {theme.get('address','')}"
+    if c.stringWidth(dir_text, "Helvetica", 10) > _MAX_TEXT_WIDTH:
+        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=9, leading=13)
+    else:
+        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=10, leading=14)
 
-            desc_parts = []
-            while i < len(tokens) and tokens[i].lower() != "a":
-                desc_parts.append(tokens[i])
-                i += 1
+    # Teléfono con wrap por consistencia
+    tel_text = f"Teléfono: {theme.get('phone','')}"
+    y -= 2
+    _draw_wrapped(c, tel_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=10, leading=14)
 
-            if i < len(tokens) and tokens[i].lower() == "a":
-                i += 1
+def _datos_factura(c, theme, fecha, cliente, estado):
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(theme["accent"])
+    c.drawString(50, 700, f"FECHA: {fecha}")
+    c.drawString(50, 685, f"CLIENTE: {cliente}")
+    c.drawString(50, 670, f"ESTADO: {estado}")
+    c.setFillColor(colors.black)
 
-            precio = 0.0
-            if i < len(tokens):
-                raw = tokens[i].replace(",", ".")
-                try:
-                    precio = float(raw)
-                except:
-                    precio = 0.0
-                i += 1
+def _cabecera_tabla(c, y, theme):
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(theme["primary"])
+    c.drawString(50, y, "DESCRIPCIÓN")
+    c.drawString(250, y, "CANTIDAD")
+    c.drawString(350, y, "PRECIO")
+    c.drawString(450, y, "TOTAL")
+    c.setStrokeColor(theme["primary"])
+    c.setLineWidth(1)
+    c.line(50, y - 5, 500, y - 5)
 
-            descripcion = " ".join(desc_parts).strip()
-            total = cantidad * precio
-            if descripcion:
-                productos.append([cantidad, descripcion, precio, total])
+def _filas(c, y, theme, productos):
+    c.setFont("Helvetica", 10)
+    total_factura = 0
+    for cantidad, descripcion, precio, total in productos:
+        if y < 100:
+            c.showPage()
+            y = 750
+            _cabecera_tabla(c, y, theme)
+            y -= 20
 
-        else:
-            i += 1
+        desc_lines = simpleSplit(_cap(descripcion), "Helvetica", 10, 180)
+        for idx, line in enumerate(desc_lines):
+            c.setFillColor(colors.black)
+            c.drawString(50, y, line)
+            if idx == 0:
+                c.drawRightString(300, y, str(cantidad))
+                c.drawRightString(420, y, f"Q {precio:.2f}")
+                c.drawRightString(500, y, f"Q {total:.2f}")
+            y -= 18
 
-    return cliente, estado, fecha, productos
+        c.setStrokeColor(theme["line"])
+        c.setLineWidth(0.8)
+        c.line(50, y + 10, 500, y + 10)
+        c.setLineWidth(0.5)
+        total_factura += total
+    return y, total_factura
 
+def _totales_y_nota(c, y, theme, total_factura):
+    if y < 120:
+        c.showPage()
+        y = 750
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(theme["primary"])
+    c.drawString(350, y - 10, "TOTAL:")
+    c.drawRightString(500, y - 10, f"Q {total_factura:,.2f}")
+    c.line(350, y - 15, 500, y - 15)
 
-def leer_seccion(tokens, start_index, stop_words):
-    partes = []
-    i = start_index
-    while i < len(tokens) and tokens[i].lower() not in stop_words:
-        partes.append(tokens[i])
-        i += 1
-    return i, " ".join(partes).strip()
+    c.setFont("Times-Italic", 11)
+    c.setFillColor(theme["note"])
+    c.drawString(50, y - 50, "(Factura no contable con fines informativos.)")
+    c.drawString(50, y - 65, "¡Gracias por su compra, vuelva pronto!")
 
+# =========================
+# Generadores
+# =========================
+def generar_factura(cliente, estado, fecha, productos, tema="A"):
+    """
+    Generador genérico. Cambia 'tema' a 'A' o 'B' (o agrega más en THEMES).
+    """
+    theme = THEMES.get(tema.upper(), THEMES["A"])
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
 
-def procesar_fecha(fecha_str):
-    if not fecha_str:
-        return datetime.today().strftime("%d/%m/%Y")
-    if fecha_str.lower() == "hoy":
-        return datetime.today().strftime("%d/%m/%Y")
-    try:
-        return datetime.strptime(fecha_str, "%d/%m/%Y").strftime("%d/%m/%Y")
-    except:
-        return datetime.today().strftime("%d/%m/%Y")
+    _encabezado(c, theme)
+    _datos_factura(c, theme, fecha, cliente, estado)
 
+    y = 640
+    _cabecera_tabla(c, y, theme)
+    y -= 20
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    y, total_factura = _filas(c, y, theme, productos)
+    _totales_y_nota(c, y, theme, total_factura)
+
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+def generar_factura_A(cliente, estado, fecha, productos):
+    return generar_factura(cliente, estado, fecha, productos, tema="A")
+
+def generar_factura_B(cliente, estado, fecha, productos):
+    return generar_factura(cliente, estado, fecha, productos, tema="B")
