@@ -60,34 +60,67 @@ def _safe_nombre_cliente(nombre: str) -> str:
 
 @app.route("/generar_desde_texto", methods=["POST"])
 def generar_desde_texto():
-    mensaje = request.form.get("mensaje")
     plantilla = (request.form.get("plantilla") or "A").upper()
-    if not mensaje:
-        return "❌ No se recibió el texto", 400
+    mensaje = request.form.get("mensaje")
+    cliente_form = (request.form.get("cliente") or "").strip()
+    estado_form = (request.form.get("estado") or "").strip()
+    fecha_form = (request.form.get("fecha") or "").strip()
+    productos_texto = request.form.get("productos")
+    monto_parcial_raw = request.form.get("monto_parcial")
+
+    modo_formulario = any([cliente_form, estado_form, fecha_form, productos_texto])
 
     try:
-        cliente, estado, fecha, productos = parsear_mensaje(mensaje)
+        if modo_formulario:
+            cliente = cliente_form
+            estado = estado_form
+            fecha = fecha_form or "HOY"
+            productos = parsear_productos(productos_texto)
 
-        if not cliente:
-            raise ValidacionError("Falta el nombre del cliente (línea 'CLIENTE ...').")
-        if not estado:
-            raise ValidacionError("Falta el estado del pedido (línea 'ESTADO ...').")
-        if not fecha:
-            raise ValidacionError("Falta la fecha (línea 'FECHA dd/mm/aaaa' o 'FECHA HOY').")
-        if not productos:
-            raise ValidacionError("No se encontraron productos con el formato 'cantidad descripción a precio'.")
+            if not cliente:
+                raise ValidacionError("Ingresa el nombre del cliente.")
+            if not estado:
+                raise ValidacionError("Selecciona un estado para el pedido.")
+            if not fecha:
+                raise ValidacionError("Selecciona una fecha válida.")
 
-        productos.sort(key=lambda x: x[1].lower())
-        fecha_valida = procesar_fecha(fecha)
+            fecha_valida = procesar_fecha(fecha)
+            productos.sort(key=lambda x: x[1].lower())
+            total_factura = sum(p[3] for p in productos)
+            if total_factura <= 0:
+                raise ValidacionError("El total calculado es 0. Revisa los productos ingresados.")
 
-        total_factura = sum(p[3] for p in productos)
-        if total_factura <= 0:
-            raise ValidacionError("El total calculado es 0. Revisa los precios ingresados.")
+            pago_parcial = _interpretar_pago_parcial(estado, monto_parcial_raw)
+            if pago_parcial and pago_parcial > total_factura:
+                raise ValidacionError("El pago parcial no puede ser mayor al total calculado.")
+        else:
+            if not mensaje:
+                return "❌ No se recibió el texto", 400
+
+            cliente, estado, fecha, productos = parsear_mensaje(mensaje)
+
+            if not cliente:
+                raise ValidacionError("Falta el nombre del cliente (línea 'CLIENTE ...').")
+            if not estado:
+                raise ValidacionError("Falta el estado del pedido (línea 'ESTADO ...').")
+            if not fecha:
+                raise ValidacionError("Falta la fecha (línea 'FECHA dd/mm/aaaa' o 'FECHA HOY').")
+            if not productos:
+                raise ValidacionError("No se encontraron productos con el formato 'cantidad descripción a precio'.")
+
+            productos.sort(key=lambda x: x[1].lower())
+            fecha_valida = procesar_fecha(fecha)
+
+            total_factura = sum(p[3] for p in productos)
+            if total_factura <= 0:
+                raise ValidacionError("El total calculado es 0. Revisa los precios ingresados.")
+
+            pago_parcial = 0.0
 
         if plantilla == "B":
-            pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos)
+            pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
         else:
-            pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos)
+            pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
 
         # === Nombre de salida: [CLIENTE]_Comprobante[FECHA].pdf ===
         cliente_safe = _safe_nombre_cliente(cliente)
@@ -142,6 +175,36 @@ def parsear_mensaje(mensaje: str) -> Tuple[str, str, str, List[List[float]]]:
         raise ValidacionError("\n".join(errores_producto))
 
     return cliente.strip(), estado.strip(), fecha.strip(), productos
+
+
+def parsear_productos(texto: str) -> List[List[float]]:
+    """Analiza únicamente las líneas de productos.
+
+    Está pensado para el nuevo formulario guiado que ya recibe los datos
+    generales (cliente, estado, fecha) por separado.
+    """
+    if texto is None:
+        raise ValidacionError("Agrega al menos un producto.")
+
+    lineas = [line.strip() for line in texto.splitlines()]
+    productos: List[List[float]] = []
+    errores: List[str] = []
+    for numero, linea in enumerate(lineas, start=1):
+        if not linea:
+            continue
+        if not _parece_linea_producto(linea):
+            errores.append(f"Línea {numero}: Debe iniciar con la cantidad (ej. '2 tenis a 150').")
+            continue
+        try:
+            productos.append(_parsear_linea_producto(linea))
+        except ValidacionError as exc:
+            errores.append(f"Línea {numero}: {exc}")
+
+    if errores:
+        raise ValidacionError("\n".join(errores))
+    if not productos:
+        raise ValidacionError("Agrega al menos un producto con formato 'cantidad descripción a precio'.")
+    return productos
 
 
 def _extraer_encabezado(linea: str):
@@ -231,12 +294,31 @@ def _limpiar_conectores(texto: str) -> str:
 def procesar_fecha(fecha_str: str) -> str:
     if not fecha_str:
         raise ValidacionError("Debes indicar una fecha (por ejemplo, FECHA HOY).")
+    fecha_str = fecha_str.strip()
     if fecha_str.lower() == "hoy":
         return datetime.today().strftime("%d/%m/%Y")
+
+    formatos = ("%d/%m/%Y", "%Y-%m-%d")
+    for formato in formatos:
+        try:
+            return datetime.strptime(fecha_str, formato).strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+    raise ValidacionError("La fecha debe tener el formato dd/mm/aaaa, yyyy-mm-dd o ser 'HOY'.")
+
+
+def _interpretar_pago_parcial(estado: str, valor: str) -> float:
+    if (estado or "").strip().upper() != "PAGO PARCIAL":
+        return 0.0
+    if valor is None or not valor.strip():
+        raise ValidacionError("Ingresa el monto del pago parcial.")
     try:
-        return datetime.strptime(fecha_str, "%d/%m/%Y").strftime("%d/%m/%Y")
+        monto = float(valor)
     except ValueError as exc:
-        raise ValidacionError("La fecha debe tener el formato dd/mm/aaaa o ser 'HOY'.") from exc
+        raise ValidacionError("El monto del pago parcial no es válido.") from exc
+    if monto <= 0:
+        raise ValidacionError("El pago parcial debe ser mayor a 0.")
+    return monto
 
 
 if __name__ == "__main__":

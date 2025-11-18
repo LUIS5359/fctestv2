@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from app import parsear_mensaje, procesar_fecha, ValidacionError
+from app import parsear_mensaje, parsear_productos, procesar_fecha, ValidacionError
 
 
 def test_parsear_mensaje_basico():
@@ -48,6 +48,20 @@ def test_procesar_fecha_hoy_y_formato():
     assert procesar_fecha("01/03/2024") == "01/03/2024"
 
 
+def test_procesar_fecha_iso():
+    assert procesar_fecha("2024-03-01") == "01/03/2024"
+
+
 def test_procesar_fecha_invalida():
     with pytest.raises(ValidacionError):
-        procesar_fecha("2024-03-01")
+        procesar_fecha("2024/03/01")
+
+
+def test_parsear_solo_productos():
+    texto = """2 calcetas deportivas a 25\n1 pantalon nike a 200"""
+    productos = parsear_productos(texto)
+
+    assert productos == [
+        [2, "calcetas deportivas", 25.0, 50.0],
+        [1, "pantalon nike", 200.0, 200.0],
+    ]
