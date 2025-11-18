@@ -5,6 +5,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader, simpleSplit
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image, ImageDraw, ImageFont
 
 # =========================
@@ -45,6 +47,48 @@ _PNG_SCALE = 2
 _IMAGE_WIDTH = int(PAGE_WIDTH * _PNG_SCALE)
 _IMAGE_HEIGHT = int(PAGE_HEIGHT * _PNG_SCALE)
 
+
+# =========================
+# Fuentes compartidas
+# =========================
+FONT_REGULAR = "Helvetica"
+FONT_BOLD = "Helvetica-Bold"
+FONT_ITALIC = "Times-Italic"
+
+
+def _register_fonts():
+    """Intenta registrar fuentes DejaVu para PDF y empatar el estilo de la imagen."""
+
+    global FONT_REGULAR, FONT_BOLD, FONT_ITALIC
+
+    font_dir = "/usr/share/fonts/truetype/dejavu"
+    fonts = {
+        "FacturaDejaVu": "DejaVuSans.ttf",
+        "FacturaDejaVu-Bold": "DejaVuSans-Bold.ttf",
+        "FacturaDejaVu-Italic": "DejaVuSans-Oblique.ttf",
+    }
+
+    registrados = {}
+    for name, filename in fonts.items():
+        path = os.path.join(font_dir, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont(name, path))
+            registrados[name] = True
+        except Exception as exc:
+            print(f"[factura] No se pudo registrar la fuente {filename}: {exc}")
+
+    if registrados.get("FacturaDejaVu"):
+        FONT_REGULAR = "FacturaDejaVu"
+    if registrados.get("FacturaDejaVu-Bold"):
+        FONT_BOLD = "FacturaDejaVu-Bold"
+    if registrados.get("FacturaDejaVu-Italic"):
+        FONT_ITALIC = "FacturaDejaVu-Italic"
+
+
+_register_fonts()
+
 # =========================
 # Utilidades de dibujo
 # =========================
@@ -58,7 +102,7 @@ def _try_logo(c, path, x=40, y=720, w=80, h=80):
         c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.2))
         c.setLineWidth(1)
         c.rect(x, y, w, h)
-        c.setFont("Helvetica", 8)
+        c.setFont(FONT_REGULAR, 8)
         c.drawCentredString(x + w / 2, y + h / 2 - 4, "LOGO")
         c.restoreState()
 
@@ -77,7 +121,7 @@ def _try_logo(c, path, x=40, y=720, w=80, h=80):
         print(f"[factura] Error al cargar logo '{path}': {exc}")
         _placeholder()
 
-def _draw_wrapped(c, text, x, y, width, font="Helvetica", size=10, leading=14, color=colors.black, max_lines=None):
+def _draw_wrapped(c, text, x, y, width, font=FONT_REGULAR, size=10, leading=14, color=colors.black, max_lines=None):
     """
     Dibuja 'text' con salto de línea automático dentro de 'width'.
     Devuelve la nueva coordenada y (la siguiente línea base disponible).
@@ -100,7 +144,7 @@ def _encabezado(c, theme):
     _try_logo(c, theme.get("logo"))
 
     # Título
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont(FONT_BOLD, 16)
     c.setFillColor(theme["primary"])
     c.drawString(_TEXT_X, 770, theme.get("title", ""))
 
@@ -110,18 +154,18 @@ def _encabezado(c, theme):
 
     # Dirección (si es muy larga, baja a 9pt)
     dir_text = f"Dirección: {theme.get('address','')}"
-    if c.stringWidth(dir_text, "Helvetica", 10) > _MAX_TEXT_WIDTH:
-        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=9, leading=13)
+    if c.stringWidth(dir_text, FONT_REGULAR, 10) > _MAX_TEXT_WIDTH:
+        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font=FONT_REGULAR, size=9, leading=13)
     else:
-        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=10, leading=14)
+        y = _draw_wrapped(c, dir_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font=FONT_REGULAR, size=10, leading=14)
 
     # Teléfono con wrap por consistencia
     tel_text = f"Teléfono: {theme.get('phone','')}"
     y -= 2
-    _draw_wrapped(c, tel_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font="Helvetica", size=10, leading=14)
+    _draw_wrapped(c, tel_text, _TEXT_X, y, _MAX_TEXT_WIDTH, font=FONT_REGULAR, size=10, leading=14)
 
 def _datos_factura(c, theme, fecha, cliente, estado):
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont(FONT_BOLD, 10)
     c.setFillColor(theme["accent"])
     c.drawString(50, 700, f"FECHA: {fecha}")
     c.drawString(50, 685, f"CLIENTE: {cliente}")
@@ -129,7 +173,7 @@ def _datos_factura(c, theme, fecha, cliente, estado):
     c.setFillColor(colors.black)
 
 def _cabecera_tabla(c, y, theme):
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont(FONT_BOLD, 10)
     c.setFillColor(theme["primary"])
     c.drawString(50, y, "DESCRIPCIÓN")
     c.drawString(250, y, "CANTIDAD")
@@ -140,7 +184,7 @@ def _cabecera_tabla(c, y, theme):
     c.line(50, y - 5, 500, y - 5)
 
 def _filas(c, y, theme, productos):
-    c.setFont("Helvetica", 10)
+    c.setFont(FONT_REGULAR, 10)
     total_factura = 0
     for cantidad, descripcion, precio, total in productos:
         if y < 100:
@@ -149,7 +193,7 @@ def _filas(c, y, theme, productos):
             _cabecera_tabla(c, y, theme)
             y -= 20
 
-        desc_lines = simpleSplit(_cap(descripcion), "Helvetica", 10, 180)
+        desc_lines = simpleSplit(_cap(descripcion), FONT_REGULAR, 10, 180)
         for idx, line in enumerate(desc_lines):
             c.setFillColor(colors.black)
             c.drawString(50, y, line)
@@ -170,7 +214,7 @@ def _totales_y_nota(c, y, theme, total_factura, pago_parcial=0.0):
     if y < 120:
         c.showPage()
         y = 750
-    c.setFont("Helvetica-Bold", 12)
+    c.setFont(FONT_BOLD, 12)
     c.setFillColor(theme["primary"])
     c.drawString(350, y - 10, "TOTAL:")
     c.drawRightString(500, y - 10, f"Q {total_factura:,.2f}")
@@ -178,7 +222,7 @@ def _totales_y_nota(c, y, theme, total_factura, pago_parcial=0.0):
 
     if pago_parcial:
         saldo = max(total_factura - pago_parcial, 0)
-        c.setFont("Helvetica", 10)
+        c.setFont(FONT_REGULAR, 10)
         c.setFillColor(theme["accent"])
         c.drawString(350, y - 30, "Pago parcial:")
         c.drawRightString(500, y - 30, f"Q {pago_parcial:,.2f}")
@@ -186,7 +230,7 @@ def _totales_y_nota(c, y, theme, total_factura, pago_parcial=0.0):
         c.drawRightString(500, y - 45, f"Q {saldo:,.2f}")
         y -= 20
 
-    c.setFont("Times-Italic", 11)
+    c.setFont(FONT_ITALIC, 11)
     c.setFillColor(theme["note"])
     c.drawString(50, y - 50, "(Factura no contable con fines informativos.)")
     c.drawString(50, y - 65, "¡Gracias por su compra, vuelva pronto!")
