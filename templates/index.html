@@ -67,6 +67,12 @@
     }
     .footer{margin-top:22px; display:flex; gap:10px; align-items:center; color:#9ca3af; font-size:.9rem}
     .dot{width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 10px rgba(16,185,129,.8)}
+    .rules{margin-top:18px; padding:14px; border:1px solid #1f2937; border-radius:12px; background:rgba(15,23,42,.6);}
+    .rules h3{margin:0 0 10px 0; font-size:1rem; color:#cbd5e1}
+    .rules ul{margin:0; padding-left:20px; color:#cbd5e1}
+    .rules li{margin-bottom:6px}
+    .errors{display:none; margin-top:12px; border-radius:12px; border:1px solid rgba(244,63,94,.4); background:rgba(244,63,94,.1); padding:12px; color:#fecdd3; font-size:.95rem}
+    .errors ul{margin:0; padding-left:20px}
   </style>
 </head>
 <body>
@@ -79,10 +85,12 @@
     <div class="card">
       <form action="/generar_desde_texto" method="POST" target="_blank" id="facturaForm">
         <label for="mensaje">Mensaje</label>
-        <textarea id="mensaje" name="mensaje" spellcheck="false"></textarea>
+        <textarea id="mensaje" name="mensaje" spellcheck="false" placeholder="CLIENTE Ana Pérez&#10;ESTADO En tránsito&#10;FECHA HOY&#10;2 tenis deportivos a 250&#10;1 gorra azul $45 c/u"></textarea>
 
         <!-- Campo oculto que decidirá Local 1 (A) o Local 2 (B) -->
         <input type="hidden" name="plantilla" id="plantilla" value="A" />
+
+        <div class="errors" id="errores"></div>
 
         <div class="row">
           <button class="btn local1" onclick="setPlantilla(event,'A')">Local 1</button>
@@ -90,6 +98,17 @@
         </div>
 
         <p class="hint">El PDF se abrirá en una pestaña nueva. Puedes editar el texto antes de elegir el local.</p>
+
+        <div class="rules">
+          <h3>Formato recomendado</h3>
+          <ul>
+            <li>Una línea por dato: <strong>CLIENTE</strong>, <strong>ESTADO</strong> y <strong>FECHA</strong>.</li>
+            <li>Escribe cada producto en su propia línea: <em>cantidad descripción a precio</em>.</li>
+            <li>Puedes usar "HOY" como fecha o un formato <code>dd/mm/aaaa</code>.</li>
+            <li>Acepta cantidades en número o en palabras ("tres", "veinte").</li>
+            <li>El precio puede llevar Q/$ y "c/u" o "por unidad" al final.</li>
+          </ul>
+        </div>
 
         <div class="examples">
           <div class="example">
@@ -111,25 +130,44 @@ FECHA 12/08/2025
   </div>
 
 <script>
-  // Prefill sin productos (con saltos de línea reales)
-  (function prefill(){
-    const textarea = document.getElementById('mensaje');
-    if (!textarea.value.trim()) {
-      // Opción 1: usando \n
-      textarea.value = ['CLIENTE CLIENTE','ESTADO ESTADO','FECHA HOY'].join('\n');
+  const form = document.getElementById('facturaForm');
+  const erroresBox = document.getElementById('errores');
 
-      // Opción 2 (equivalente y más legible):
-      // textarea.value = `CLIENTE CLIENTE
-      // ESTADO ESTADO
-      // FECHA HOY`;
+  form.addEventListener('submit', function(evt){
+    const texto = (document.getElementById('mensaje').value || '').trim();
+    const errores = [];
+
+    if (!texto) {
+      errores.push('Agrega al menos un cliente y un producto.');
     }
-  })();
+    if (!/^cliente\b/im.test(texto)) {
+      errores.push('Incluye una línea que comience con "CLIENTE".');
+    }
+    if (!/^estado\b/im.test(texto)) {
+      errores.push('Incluye una línea que comience con "ESTADO".');
+    }
+    if (!/^fecha\b/im.test(texto)) {
+      errores.push('Incluye una línea que comience con "FECHA".');
+    }
+    if (!/^\s*(\d+|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/im.test(texto)) {
+      errores.push('Agrega al menos una línea con cantidad, descripción y precio.');
+    }
+
+    if (errores.length) {
+      evt.preventDefault();
+      erroresBox.innerHTML = '<ul><li>' + errores.join('</li><li>') + '</li></ul>';
+      erroresBox.style.display = 'block';
+      return false;
+    }
+    erroresBox.style.display = 'none';
+    return true;
+  });
 
   // Establece la plantilla y envía el formulario
   function setPlantilla(evt, tipo){
     evt.preventDefault();
     document.getElementById('plantilla').value = tipo; // "A" = Local 1, "B" = Local 2
-    document.getElementById('facturaForm').submit();
+    document.getElementById('facturaForm').requestSubmit();
   }
 </script>
 
