@@ -161,7 +161,7 @@ def _filas(c, y, theme, productos):
         total_factura += total
     return y, total_factura
 
-def _totales_y_nota(c, y, theme, total_factura):
+def _totales_y_nota(c, y, theme, total_factura, pago_parcial=0.0):
     if y < 120:
         c.showPage()
         y = 750
@@ -171,6 +171,16 @@ def _totales_y_nota(c, y, theme, total_factura):
     c.drawRightString(500, y - 10, f"Q {total_factura:,.2f}")
     c.line(350, y - 15, 500, y - 15)
 
+    if pago_parcial:
+        saldo = max(total_factura - pago_parcial, 0)
+        c.setFont("Helvetica", 10)
+        c.setFillColor(theme["accent"])
+        c.drawString(350, y - 30, "Pago parcial:")
+        c.drawRightString(500, y - 30, f"Q {pago_parcial:,.2f}")
+        c.drawString(350, y - 45, "Saldo pendiente:")
+        c.drawRightString(500, y - 45, f"Q {saldo:,.2f}")
+        y -= 20
+
     c.setFont("Times-Italic", 11)
     c.setFillColor(theme["note"])
     c.drawString(50, y - 50, "(Factura no contable con fines informativos.)")
@@ -179,7 +189,7 @@ def _totales_y_nota(c, y, theme, total_factura):
 # =========================
 # Generadores
 # =========================
-def generar_factura(cliente, estado, fecha, productos, tema="A"):
+def generar_factura(cliente, estado, fecha, productos, tema="A", pago_parcial=0.0):
     """
     Generador genérico. Cambia 'tema' a 'A' o 'B' (o agrega más en THEMES).
     """
@@ -195,14 +205,14 @@ def generar_factura(cliente, estado, fecha, productos, tema="A"):
     y -= 20
 
     y, total_factura = _filas(c, y, theme, productos)
-    _totales_y_nota(c, y, theme, total_factura)
+    _totales_y_nota(c, y, theme, total_factura, pago_parcial=pago_parcial)
 
     c.save()
     buffer.seek(0)
     return buffer
 
-def generar_factura_A(cliente, estado, fecha, productos):
-    return generar_factura(cliente, estado, fecha, productos, tema="A")
+def generar_factura_A(cliente, estado, fecha, productos, pago_parcial=0.0):
+    return generar_factura(cliente, estado, fecha, productos, tema="A", pago_parcial=pago_parcial)
 
-def generar_factura_B(cliente, estado, fecha, productos):
-    return generar_factura(cliente, estado, fecha, productos, tema="B")
+def generar_factura_B(cliente, estado, fecha, productos, pago_parcial=0.0):
+    return generar_factura(cliente, estado, fecha, productos, tema="B", pago_parcial=pago_parcial)

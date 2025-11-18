@@ -38,13 +38,32 @@
       backdrop-filter:saturate(120%) blur(6px);
     }
     label{display:block; font-weight:600; margin-bottom:8px; color:#cbd5e1}
+    input[type="text"], input[type="date"], input[type="number"], select, textarea{
+      width:100%;
+      color:var(--text);
+      background:#0b1324;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px 14px;
+      font-family:inherit;
+      font-size:1rem;
+      outline:none;
+    }
     textarea{
-      width:100%; min-height:160px; color:var(--text); background:#0b1324; border:1px solid var(--border);
+      min-height:160px;
       border-radius:12px; padding:12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       resize:vertical; outline:none;
     }
-    textarea:focus{border-color:#334155; box-shadow:0 0 0 3px rgba(96,165,250,.15)}
+    input:focus, select:focus, textarea:focus{border-color:#334155; box-shadow:0 0 0 3px rgba(96,165,250,.15)}
     .row{display:flex; gap:12px; flex-wrap:wrap; margin-top:14px}
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:14px;
+      margin-bottom:18px;
+    }
+    .field{margin-bottom:16px}
+    .hidden{display:none}
     .btn{
       appearance:none; border:1px solid var(--border); background:#0b1324; color:var(--text);
       padding:12px 16px; border-radius:12px; font-weight:700; letter-spacing:.2px; cursor:pointer;
@@ -84,8 +103,39 @@
 
     <div class="card">
       <form action="/generar_desde_texto" method="POST" target="_blank" id="facturaForm">
-        <label for="mensaje">Mensaje</label>
-        <textarea id="mensaje" name="mensaje" spellcheck="false" placeholder="CLIENTE Ana Pérez&#10;ESTADO En tránsito&#10;FECHA HOY&#10;2 tenis deportivos a 250&#10;1 gorra azul $45 c/u"></textarea>
+        <div class="grid">
+          <div class="field">
+            <label for="cliente">Cliente</label>
+            <input type="text" id="cliente" name="cliente" placeholder="Ana Pérez" />
+          </div>
+          <div class="field">
+            <label for="fecha">Fecha</label>
+            <input type="date" id="fecha" name="fecha" />
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label for="estado">Estado</label>
+            <select id="estado" name="estado">
+              <option value="">Selecciona una opción</option>
+              <option value="PAGADO">Pagado</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="PAGO PARCIAL">Pago parcial</option>
+              <option value="ENVIADO">Enviado</option>
+              <option value="RECIBIDO">Recibido</option>
+            </select>
+          </div>
+          <div class="field hidden" id="pagoParcialField">
+            <label for="montoParcial">Monto pago parcial</label>
+            <input type="number" step="0.01" min="0" id="montoParcial" name="monto_parcial" placeholder="0.00" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="productos">Productos</label>
+          <textarea id="productos" name="productos" spellcheck="false" placeholder="2 tenis deportivos a 250&#10;1 gorra azul $45 c/u"></textarea>
+        </div>
 
         <!-- Campo oculto que decidirá Local 1 (A) o Local 2 (B) -->
         <input type="hidden" name="plantilla" id="plantilla" value="A" />
@@ -97,27 +147,25 @@
           <button class="btn local2" onclick="setPlantilla(event,'B')">Local 2</button>
         </div>
 
-        <p class="hint">El PDF se abrirá en una pestaña nueva. Puedes editar el texto antes de elegir el local.</p>
+        <p class="hint">El PDF se abrirá en una pestaña nueva. Completa los campos y selecciona el local para continuar.</p>
 
         <div class="rules">
           <h3>Formato recomendado</h3>
           <ul>
-            <li>Una línea por dato: <strong>CLIENTE</strong>, <strong>ESTADO</strong> y <strong>FECHA</strong>.</li>
+            <li>Ingresa el cliente, fecha (se llena con la actual) y estado del pedido.</li>
             <li>Escribe cada producto en su propia línea: <em>cantidad descripción a precio</em>.</li>
-            <li>Puedes usar "HOY" como fecha o un formato <code>dd/mm/aaaa</code>.</li>
-            <li>Acepta cantidades en número o en palabras ("tres", "veinte").</li>
+            <li>Puedes usar cantidades en número o palabras ("tres", "veinte").</li>
             <li>El precio puede llevar Q/$ y "c/u" o "por unidad" al final.</li>
+            <li>Si seleccionas <strong>Pago parcial</strong>, indica el monto abonado.</li>
           </ul>
         </div>
 
         <div class="examples">
           <div class="example">
             <h3>Ejemplo de formato con productos (solo referencia)</h3>
-            <code class="block">CLIENTE Maria López
-ESTADO Pagado
-FECHA 12/08/2025
-2 calcetas deportivas a 25
-1 pantalon nike a 200</code>
+            <code class="block">2 calcetas deportivas a 25
+1 pantalon nike a 200
+3 gorras urbanas x Q45 c/u</code>
           </div>
         </div>
 
@@ -132,25 +180,47 @@ FECHA 12/08/2025
 <script>
   const form = document.getElementById('facturaForm');
   const erroresBox = document.getElementById('errores');
+  const fechaInput = document.getElementById('fecha');
+  const estadoSelect = document.getElementById('estado');
+  const pagoParcialField = document.getElementById('pagoParcialField');
+  const pagoParcialInput = document.getElementById('montoParcial');
+
+  fechaInput.valueAsDate = new Date();
+
+  estadoSelect.addEventListener('change', () => {
+    const show = estadoSelect.value === 'PAGO PARCIAL';
+    pagoParcialField.classList.toggle('hidden', !show);
+    if (!show) {
+      pagoParcialInput.value = '';
+    }
+  });
 
   form.addEventListener('submit', function(evt){
-    const texto = (document.getElementById('mensaje').value || '').trim();
+    const cliente = (document.getElementById('cliente').value || '').trim();
+    const fecha = fechaInput.value;
+    const estado = estadoSelect.value;
+    const productosTexto = (document.getElementById('productos').value || '').trim();
+    const pagoParcial = pagoParcialInput.value;
     const errores = [];
 
-    if (!texto) {
-      errores.push('Agrega al menos un cliente y un producto.');
+    if (!cliente) {
+      errores.push('Agrega el nombre del cliente.');
     }
-    if (!/^cliente\b/im.test(texto)) {
-      errores.push('Incluye una línea que comience con "CLIENTE".');
+    if (!fecha) {
+      errores.push('Selecciona una fecha.');
     }
-    if (!/^estado\b/im.test(texto)) {
-      errores.push('Incluye una línea que comience con "ESTADO".');
+    if (!estado) {
+      errores.push('Selecciona un estado para el pedido.');
     }
-    if (!/^fecha\b/im.test(texto)) {
-      errores.push('Incluye una línea que comience con "FECHA".');
+    if (!productosTexto) {
+      errores.push('Agrega al menos un producto.');
+    } else if (!/^\s*(\d+|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/im.test(productosTexto)) {
+      errores.push('Cada producto debe iniciar con la cantidad.');
     }
-    if (!/^\s*(\d+|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/im.test(texto)) {
-      errores.push('Agrega al menos una línea con cantidad, descripción y precio.');
+    if (estado === 'PAGO PARCIAL') {
+      if (!pagoParcial || Number(pagoParcial) <= 0) {
+        errores.push('Indica el monto del pago parcial.');
+      }
     }
 
     if (errores.length) {
