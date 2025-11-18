@@ -1,9 +1,15 @@
 from flask import Flask, request, send_file, render_template
-from generar_factura import generar_factura_A, generar_factura_B
+from generar_factura import (
+    generar_factura_A,
+    generar_factura_B,
+    generar_imagen_factura,
+)
 from datetime import datetime
 import re
 import os
 from typing import List, Tuple
+from io import BytesIO
+from zipfile import ZipFile
 
 # from flask_cors import CORS  # si sirves HTML desde otro dominio
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -119,19 +125,31 @@ def generar_desde_texto():
 
         if plantilla == "B":
             pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
+            png_stream = generar_imagen_factura(cliente, estado, fecha_valida, productos, tema="B", pago_parcial=pago_parcial)
         else:
             pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
+            png_stream = generar_imagen_factura(cliente, estado, fecha_valida, productos, tema="A", pago_parcial=pago_parcial)
 
         # === Nombre de salida: [CLIENTE]_Comprobante[FECHA].pdf ===
         cliente_safe = _safe_nombre_cliente(cliente)
         fecha_filename = fecha_valida.replace("/", "-")  # dd-mm-YYYY
         filename = f"{cliente_safe}_Comprobante{fecha_filename}.pdf"
+        png_name = f"{cliente_safe}_Comprobante{fecha_filename}.png"
+        zip_name = f"{cliente_safe}_Comprobante{fecha_filename}.zip"
+
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            pdf_stream.seek(0)
+            zip_file.writestr(filename, pdf_stream.read())
+            png_stream.seek(0)
+            zip_file.writestr(png_name, png_stream.read())
+        zip_buffer.seek(0)
 
         return send_file(
-            pdf_stream,
-            mimetype="application/pdf",
+            zip_buffer,
+            mimetype="application/zip",
             as_attachment=True,
-            download_name=filename
+            download_name=zip_name
         )
     except ValidacionError as e:
         return f"❌ {e}", 422
