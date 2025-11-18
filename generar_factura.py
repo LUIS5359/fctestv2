@@ -1,5 +1,6 @@
 # generar_factura.py
 import io
+import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -46,12 +47,30 @@ def _cap(s):
     return s[0].upper() + s[1:] if s else s
 
 def _try_logo(c, path, x=40, y=720, w=80, h=80):
+    """Dibuja el logo si existe; de lo contrario, muestra un marcador."""
+    def _placeholder():
+        c.saveState()
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.2))
+        c.setLineWidth(1)
+        c.rect(x, y, w, h)
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(x + w / 2, y + h / 2 - 4, "LOGO")
+        c.restoreState()
+
+    if not path:
+        _placeholder()
+        return
+
     try:
-        if path:
-            img = ImageReader(path)
-            c.drawImage(img, x, y, width=w, height=h, mask='auto')
-    except Exception:
-        pass
+        if not os.path.exists(path):
+            print(f"[factura] Logo no encontrado: {path}")
+            _placeholder()
+            return
+        img = ImageReader(path)
+        c.drawImage(img, x, y, width=w, height=h, mask='auto')
+    except Exception as exc:
+        print(f"[factura] Error al cargar logo '{path}': {exc}")
+        _placeholder()
 
 def _draw_wrapped(c, text, x, y, width, font="Helvetica", size=10, leading=14, color=colors.black, max_lines=None):
     """
