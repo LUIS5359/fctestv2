@@ -8,8 +8,6 @@ from datetime import datetime
 import re
 import os
 from typing import List, Tuple
-from io import BytesIO
-from zipfile import ZipFile
 
 # from flask_cors import CORS  # si sirves HTML desde otro dominio
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -67,6 +65,7 @@ def _safe_nombre_cliente(nombre: str) -> str:
 @app.route("/generar_desde_texto", methods=["POST"])
 def generar_desde_texto():
     plantilla = (request.form.get("plantilla") or "A").upper()
+    formato = (request.form.get("formato") or "pdf").strip().lower()
     mensaje = request.form.get("mensaje")
     cliente_form = (request.form.get("cliente") or "").strip()
     estado_form = (request.form.get("estado") or "").strip()
@@ -135,21 +134,23 @@ def generar_desde_texto():
         fecha_filename = fecha_valida.replace("/", "-")  # dd-mm-YYYY
         filename = f"{cliente_safe}_Comprobante{fecha_filename}.pdf"
         png_name = f"{cliente_safe}_Comprobante{fecha_filename}.png"
-        zip_name = f"{cliente_safe}_Comprobante{fecha_filename}.zip"
+        if formato == "png":
+            stream = png_stream
+            mimetype = "image/png"
+            download_name = png_name
+        elif formato == "pdf":
+            stream = pdf_stream
+            mimetype = "application/pdf"
+            download_name = filename
+        else:
+            raise ValidacionError("Formato solicitado no válido. Usa 'pdf' o 'png'.")
 
-        zip_buffer = BytesIO()
-        with ZipFile(zip_buffer, "w") as zip_file:
-            pdf_stream.seek(0)
-            zip_file.writestr(filename, pdf_stream.read())
-            png_stream.seek(0)
-            zip_file.writestr(png_name, png_stream.read())
-        zip_buffer.seek(0)
-
+        stream.seek(0)
         return send_file(
-            zip_buffer,
-            mimetype="application/zip",
+            stream,
+            mimetype=mimetype,
             as_attachment=True,
-            download_name=zip_name
+            download_name=download_name
         )
     except ValidacionError as e:
         return f"❌ {e}", 422

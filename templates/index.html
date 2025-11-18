@@ -178,11 +178,11 @@
         <div class="errors" id="errores"></div>
 
         <div class="row">
-          <button class="btn local1" onclick="setPlantilla(event,'A')">Local 1</button>
-          <button class="btn local2" onclick="setPlantilla(event,'B')">Local 2</button>
+          <button type="button" class="btn local1" onclick="iniciarDescarga(event,'A')">Local 1</button>
+          <button type="button" class="btn local2" onclick="iniciarDescarga(event,'B')">Local 2</button>
         </div>
 
-        <p class="hint">Se descargará un archivo ZIP con el PDF y la imagen PNG. Completa los campos, revisa la vista previa y selecciona el local para continuar.</p>
+        <p class="hint">Se descargarán dos archivos separados (PDF y la imagen tipo captura). Completa los campos, revisa la vista previa y selecciona el local para continuar.</p>
 
         <div class="examples">
           <div class="example">
@@ -228,6 +228,11 @@
   actualizarPreview();
 
   form.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    validarFormulario();
+  });
+
+  function validarFormulario(){
     const cliente = (document.getElementById('cliente').value || '').trim();
     const fecha = fechaInput.value;
     const estado = estadoSelect.value;
@@ -261,14 +266,13 @@
     }
 
     if (errores.length) {
-      evt.preventDefault();
       erroresBox.innerHTML = '<ul><li>' + errores.join('</li><li>') + '</li></ul>';
       erroresBox.style.display = 'block';
       return false;
     }
     erroresBox.style.display = 'none';
     return true;
-  });
+  }
 
   function formatearMoneda(valor) {
     if (!Number.isFinite(valor)) {
@@ -350,11 +354,72 @@
     }
   }
 
-  // Establece la plantilla y envía el formulario
-  function setPlantilla(evt, tipo){
+  async function iniciarDescarga(evt, tipo){
     evt.preventDefault();
-    document.getElementById('plantilla').value = tipo; // "A" = Local 1, "B" = Local 2
-    document.getElementById('facturaForm').requestSubmit();
+    document.getElementById('plantilla').value = tipo;
+    if (!validarFormulario()) {
+      return;
+    }
+    await descargarArchivosSecuenciales();
+  }
+
+  async function descargarArchivosSecuenciales(){
+    toggleBotones(true);
+    try {
+      await solicitarArchivo('pdf');
+      await solicitarArchivo('png');
+    } catch (error) {
+      mostrarErrorServidor(error.message || 'Ocurrió un error al generar los archivos.');
+    } finally {
+      toggleBotones(false);
+    }
+  }
+
+  function toggleBotones(desactivar){
+    document.querySelectorAll('.btn.local1, .btn.local2').forEach(btn => {
+      btn.disabled = desactivar;
+      btn.textContent = desactivar ? 'Generando…' : (btn.classList.contains('local1') ? 'Local 1' : 'Local 2');
+    });
+  }
+
+  async function solicitarArchivo(formato){
+    const formData = new FormData(form);
+    formData.set('formato', formato);
+    const respuesta = await fetch(form.action, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!respuesta.ok) {
+      const texto = await respuesta.text();
+      throw new Error((texto || 'Error al generar el archivo').replace(/^❌\s*/, ''));
+    }
+
+    const blob = await respuesta.blob();
+    const filename = obtenerNombreArchivo(respuesta.headers.get('Content-Disposition'), formato);
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = filename;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function obtenerNombreArchivo(disposicion, formato){
+    if (disposicion){
+      const match = /filename="?([^";]+)"?/i.exec(disposicion);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return formato === 'png' ? 'factura.png' : 'factura.pdf';
+  }
+
+  function mostrarErrorServidor(mensaje){
+    erroresBox.innerHTML = '<ul><li>' + mensaje + '</li></ul>';
+    erroresBox.style.display = 'block';
   }
 </script>
 

@@ -41,8 +41,8 @@ PAGE_WIDTH, PAGE_HEIGHT = letter
 _TEXT_X = 150
 _RIGHT_MARGIN = 36
 _MAX_TEXT_WIDTH = PAGE_WIDTH - _RIGHT_MARGIN - _TEXT_X  # ancho disponible a la derecha del logo
-_IMAGE_WIDTH = 1100
-_IMAGE_HEIGHT = 1500
+_IMAGE_WIDTH = 850
+_IMAGE_HEIGHT = 1100
 
 # =========================
 # Utilidades de dibujo
@@ -347,6 +347,10 @@ def generar_imagen_factura(cliente, estado, fecha, productos, tema="A", pago_par
     draw.text((60, y), "(Factura no contable con fines informativos.)", font=small_font, fill=note_color)
     y += 28
     draw.text((60, y), "¡Gracias por su compra, vuelva pronto!", font=small_font, fill=note_color)
+
+    contenido_util = min(max(int(y + 80), 520), _IMAGE_HEIGHT)
+    if contenido_util < _IMAGE_HEIGHT:
+        img = img.crop((0, 0, _IMAGE_WIDTH, contenido_util))
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
