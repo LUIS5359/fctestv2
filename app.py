@@ -192,8 +192,10 @@ def parsear_productos(texto: str) -> List[List[float]]:
     for numero, linea in enumerate(lineas, start=1):
         if not linea:
             continue
-        if not _parece_linea_producto(linea):
-            errores.append(f"Línea {numero}: Debe iniciar con la cantidad (ej. '2 tenis a 150').")
+        if not _linea_formulario_valida(linea):
+            errores.append(
+                f"Línea {numero}: Usa el formato '3 producto a 65', iniciando con la cantidad en números."
+            )
             continue
         try:
             productos.append(_parsear_linea_producto(linea))
@@ -214,6 +216,13 @@ def _extraer_encabezado(linea: str):
             valor = match.group("valor").strip()
             return campo, valor
     return None
+
+
+def _linea_formulario_valida(linea: str) -> bool:
+    tokens = linea.split()
+    if not tokens:
+        return False
+    return tokens[0].isdigit()
 
 
 def _parece_linea_producto(linea: str) -> bool:

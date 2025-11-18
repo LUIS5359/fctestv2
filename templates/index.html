@@ -92,6 +92,19 @@
     .rules li{margin-bottom:6px}
     .errors{display:none; margin-top:12px; border-radius:12px; border:1px solid rgba(244,63,94,.4); background:rgba(244,63,94,.1); padding:12px; color:#fecdd3; font-size:.95rem}
     .errors ul{margin:0; padding-left:20px}
+    .preview{margin-top:18px; border:1px solid var(--border); border-radius:12px; padding:16px; background:rgba(15,23,42,.6)}
+    .preview-header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
+    .preview-header h3{margin:0; font-size:1rem; color:#cbd5e1}
+    .preview-total{font-weight:700; color:var(--accent-2)}
+    .preview-list{display:flex; flex-direction:column; gap:10px}
+    .preview-item{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid rgba(148,163,184,.2); padding-bottom:10px}
+    .preview-item:last-child{border-bottom:none; padding-bottom:0}
+    .preview-desc{flex:1; display:flex; gap:8px; align-items:center}
+    .preview-qty{font-weight:700; color:var(--accent)}
+    .preview-prices{text-align:right; min-width:130px}
+    .preview-prices div{line-height:1.2}
+    .preview-empty-text{margin:0; color:var(--muted)}
+    .preview-errors{margin-top:12px; font-size:.9rem; color:#fecaca}
   </style>
 </head>
 <body>
@@ -134,7 +147,18 @@
 
         <div class="field">
           <label for="productos">Productos</label>
-          <textarea id="productos" name="productos" spellcheck="false" placeholder="2 tenis deportivos a 250&#10;1 gorra azul $45 c/u"></textarea>
+          <textarea id="productos" name="productos" spellcheck="false" placeholder="3 pelota gloria a 65&#10;2 calcetines negros a 25"></textarea>
+        </div>
+
+        <div class="preview" id="previewContainer">
+          <div class="preview-header">
+            <h3>Vista previa y totales</h3>
+            <span class="preview-total" id="previewTotal">Total: Q0.00</span>
+          </div>
+          <div id="previewList" class="preview-list">
+            <p class="preview-empty-text">Agrega productos con el formato "3 pelota gloria a 65" para ver el desglose.</p>
+          </div>
+          <div id="previewErrors" class="preview-errors hidden"></div>
         </div>
 
         <!-- Campo oculto que decidirá Local 1 (A) o Local 2 (B) -->
@@ -147,15 +171,15 @@
           <button class="btn local2" onclick="setPlantilla(event,'B')">Local 2</button>
         </div>
 
-        <p class="hint">El PDF se abrirá en una pestaña nueva. Completa los campos y selecciona el local para continuar.</p>
+        <p class="hint">El PDF se abrirá en una pestaña nueva. Completa los campos, revisa la vista previa y selecciona el local para continuar.</p>
 
         <div class="rules">
-          <h3>Formato recomendado</h3>
+          <h3>Formato obligatorio</h3>
           <ul>
-            <li>Ingresa el cliente, fecha (se llena con la actual) y estado del pedido.</li>
-            <li>Escribe cada producto en su propia línea: <em>cantidad descripción a precio</em>.</li>
-            <li>Puedes usar cantidades en número o palabras ("tres", "veinte").</li>
-            <li>El precio puede llevar Q/$ y "c/u" o "por unidad" al final.</li>
+            <li>Ingresa el cliente, la fecha (si la dejas vacía se usa la actual) y el estado del pedido.</li>
+            <li>Cada producto debe escribirse en su propia línea con este formato: <strong>cantidad descripción a precio</strong>.</li>
+            <li>La cantidad siempre debe ir en números, por ejemplo: <strong>3 pelota gloria a 65</strong>.</li>
+            <li>El precio va al final; puedes añadir conectores como "a" o "por" y Q/$ o "c/u".</li>
             <li>Si seleccionas <strong>Pago parcial</strong>, indica el monto abonado.</li>
           </ul>
         </div>
@@ -163,9 +187,9 @@
         <div class="examples">
           <div class="example">
             <h3>Ejemplo de formato con productos (solo referencia)</h3>
-            <code class="block">2 calcetas deportivas a 25
-1 pantalon nike a 200
-3 gorras urbanas x Q45 c/u</code>
+            <code class="block">3 pelota gloria a 65
+2 camisetas básicas a 90
+1 mochila urbana por Q250</code>
           </div>
         </div>
 
@@ -184,6 +208,11 @@
   const estadoSelect = document.getElementById('estado');
   const pagoParcialField = document.getElementById('pagoParcialField');
   const pagoParcialInput = document.getElementById('montoParcial');
+  const productosTextarea = document.getElementById('productos');
+  const previewList = document.getElementById('previewList');
+  const previewTotal = document.getElementById('previewTotal');
+  const previewErrors = document.getElementById('previewErrors');
+  const currencyFormatter = new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ' });
 
   fechaInput.valueAsDate = new Date();
 
@@ -195,13 +224,17 @@
     }
   });
 
+  productosTextarea.addEventListener('input', actualizarPreview);
+  actualizarPreview();
+
   form.addEventListener('submit', function(evt){
     const cliente = (document.getElementById('cliente').value || '').trim();
     const fecha = fechaInput.value;
     const estado = estadoSelect.value;
-    const productosTexto = (document.getElementById('productos').value || '').trim();
+    const productosTexto = (productosTextarea.value || '').trim();
     const pagoParcial = pagoParcialInput.value;
     const errores = [];
+    let lineasProductos = [];
 
     if (!cliente) {
       errores.push('Agrega el nombre del cliente.');
@@ -214,8 +247,12 @@
     }
     if (!productosTexto) {
       errores.push('Agrega al menos un producto.');
-    } else if (!/^\s*(\d+|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/im.test(productosTexto)) {
-      errores.push('Cada producto debe iniciar con la cantidad.');
+    } else {
+      lineasProductos = productosTexto.split('\n').map(linea => linea.trim()).filter(Boolean);
+      const lineaInvalida = lineasProductos.find(linea => !parseLineaProducto(linea));
+      if (lineaInvalida) {
+        errores.push('Sigue el formato "3 pelota gloria a 65" en cada línea.');
+      }
     }
     if (estado === 'PAGO PARCIAL') {
       if (!pagoParcial || Number(pagoParcial) <= 0) {
@@ -232,6 +269,86 @@
     erroresBox.style.display = 'none';
     return true;
   });
+
+  function formatearMoneda(valor) {
+    if (!Number.isFinite(valor)) {
+      return currencyFormatter.format(0);
+    }
+    return currencyFormatter.format(valor);
+  }
+
+  function escaparHtml(texto) {
+    const mapa = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return texto.replace(/[&<>"']/g, (char) => mapa[char]);
+  }
+
+  function parseLineaProducto(linea) {
+    if (!linea) return null;
+    const priceRegex = /([\$qQ]?\s*\d+(?:[.,]\d+)?)(?:\s*(?:c\/u|cada\s+uno|unidad|u))?$/i;
+    const match = priceRegex.exec(linea);
+    if (!match) return null;
+    const precioRaw = match[1];
+    const antesDelPrecio = linea.slice(0, match.index).trim();
+    const partes = antesDelPrecio.split(/\s+/);
+    if (!partes.length) return null;
+    const cantidadToken = partes.shift();
+    if (!/^\d+$/.test(cantidadToken)) return null;
+    let descripcion = partes.join(' ').trim();
+    descripcion = descripcion.replace(/\s+(?:a|x|por|precio|cada|c\/u)\s*$/i, '').trim();
+    if (!descripcion) return null;
+    const precioNormalizado = precioRaw.replace(/[Qq$]/g, '').replace(/\s+/g, '').replace(',', '.');
+    const precio = parseFloat(precioNormalizado);
+    if (!Number.isFinite(precio)) return null;
+    const cantidad = parseInt(cantidadToken, 10);
+    return {
+      qty: cantidad,
+      description: descripcion,
+      price: precio,
+      total: cantidad * precio
+    };
+  }
+
+  function actualizarPreview() {
+    const texto = (productosTextarea.value || '').trim();
+    const lineas = texto ? texto.split('\n').map(linea => linea.trim()).filter(Boolean) : [];
+    let total = 0;
+    const fragmentos = [];
+    const erroresLocales = [];
+
+    lineas.forEach((linea, indice) => {
+      const data = parseLineaProducto(linea);
+      if (!data) {
+        erroresLocales.push(`Línea ${indice + 1}: usa "3 pelota gloria a 65".`);
+        return;
+      }
+      total += data.total;
+      fragmentos.push(`
+        <div class="preview-item">
+          <div class="preview-desc"><span class="preview-qty">${data.qty}×</span> ${escaparHtml(data.description)}</div>
+          <div class="preview-prices">
+            <div>${formatearMoneda(data.price)} c/u</div>
+            <div class="preview-line-total">${formatearMoneda(data.total)}</div>
+          </div>
+        </div>
+      `);
+    });
+
+    if (!fragmentos.length) {
+      previewList.innerHTML = '<p class="preview-empty-text">Agrega productos con el formato "3 pelota gloria a 65" para ver el desglose.</p>';
+    } else {
+      previewList.innerHTML = fragmentos.join('');
+    }
+
+    previewTotal.textContent = `Total: ${formatearMoneda(total)}`;
+
+    if (erroresLocales.length) {
+      previewErrors.innerHTML = erroresLocales.join('<br>');
+      previewErrors.classList.remove('hidden');
+    } else {
+      previewErrors.innerHTML = '';
+      previewErrors.classList.add('hidden');
+    }
+  }
 
   // Establece la plantilla y envía el formulario
   function setPlantilla(evt, tipo){
