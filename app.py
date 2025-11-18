@@ -2,7 +2,6 @@ from flask import Flask, request, send_file, render_template
 from generar_factura import (
     generar_factura_A,
     generar_factura_B,
-    generar_imagen_factura,
 )
 from datetime import datetime
 import re
@@ -65,7 +64,6 @@ def _safe_nombre_cliente(nombre: str) -> str:
 @app.route("/generar_desde_texto", methods=["POST"])
 def generar_desde_texto():
     plantilla = (request.form.get("plantilla") or "A").upper()
-    formato = (request.form.get("formato") or "pdf").strip().lower()
     mensaje = request.form.get("mensaje")
     cliente_form = (request.form.get("cliente") or "").strip()
     estado_form = (request.form.get("estado") or "").strip()
@@ -123,34 +121,33 @@ def generar_desde_texto():
             pago_parcial = 0.0
 
         if plantilla == "B":
-            pdf_stream = generar_factura_B(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
-            png_stream = generar_imagen_factura(cliente, estado, fecha_valida, productos, tema="B", pago_parcial=pago_parcial)
+            pdf_stream = generar_factura_B(
+                cliente,
+                estado,
+                fecha_valida,
+                productos,
+                pago_parcial=pago_parcial,
+            )
         else:
-            pdf_stream = generar_factura_A(cliente, estado, fecha_valida, productos, pago_parcial=pago_parcial)
-            png_stream = generar_imagen_factura(cliente, estado, fecha_valida, productos, tema="A", pago_parcial=pago_parcial)
+            pdf_stream = generar_factura_A(
+                cliente,
+                estado,
+                fecha_valida,
+                productos,
+                pago_parcial=pago_parcial,
+            )
 
         # === Nombre de salida: [CLIENTE]_Comprobante[FECHA].pdf ===
         cliente_safe = _safe_nombre_cliente(cliente)
         fecha_filename = fecha_valida.replace("/", "-")  # dd-mm-YYYY
         filename = f"{cliente_safe}_Comprobante{fecha_filename}.pdf"
-        png_name = f"{cliente_safe}_Comprobante{fecha_filename}.png"
-        if formato == "png":
-            stream = png_stream
-            mimetype = "image/png"
-            download_name = png_name
-        elif formato == "pdf":
-            stream = pdf_stream
-            mimetype = "application/pdf"
-            download_name = filename
-        else:
-            raise ValidacionError("Formato solicitado no válido. Usa 'pdf' o 'png'.")
 
-        stream.seek(0)
+        pdf_stream.seek(0)
         return send_file(
-            stream,
-            mimetype=mimetype,
+            pdf_stream,
+            mimetype="application/pdf",
             as_attachment=True,
-            download_name=download_name
+            download_name=filename,
         )
     except ValidacionError as e:
         return f"❌ {e}", 422

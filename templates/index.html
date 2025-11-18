@@ -182,7 +182,7 @@
           <button type="button" class="btn local2" onclick="iniciarDescarga(event,'B')">Local 2</button>
         </div>
 
-        <p class="hint">Se descargarán dos archivos separados (PDF y la imagen tipo captura). Completa los campos, revisa la vista previa y selecciona el local para continuar.</p>
+        <p class="hint">Se descargará un único archivo PDF. Completa los campos, revisa la vista previa y selecciona el local para continuar.</p>
 
         <div class="examples">
           <div class="example">
@@ -360,14 +360,13 @@
     if (!validarFormulario()) {
       return;
     }
-    await descargarArchivosSecuenciales();
+    await descargarPdf();
   }
 
-  async function descargarArchivosSecuenciales(){
+  async function descargarPdf(){
     toggleBotones(true);
     try {
-      await solicitarArchivo('pdf');
-      await solicitarArchivo('png');
+      await solicitarPdf();
     } catch (error) {
       mostrarErrorServidor(error.message || 'Ocurrió un error al generar los archivos.');
     } finally {
@@ -382,9 +381,9 @@
     });
   }
 
-  async function solicitarArchivo(formato){
+  async function solicitarPdf(){
     const formData = new FormData(form);
-    formData.set('formato', formato);
+    formData.set('formato', 'pdf');
     const respuesta = await fetch(form.action, {
       method: 'POST',
       body: formData
@@ -396,7 +395,7 @@
     }
 
     const blob = await respuesta.blob();
-    const filename = obtenerNombreArchivo(respuesta.headers.get('Content-Disposition'), formato);
+    const filename = obtenerNombreArchivo(respuesta.headers.get('Content-Disposition'));
     const url = URL.createObjectURL(blob);
     const enlace = document.createElement('a');
     enlace.href = url;
@@ -407,14 +406,14 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function obtenerNombreArchivo(disposicion, formato){
+  function obtenerNombreArchivo(disposicion){
     if (disposicion){
       const match = /filename="?([^";]+)"?/i.exec(disposicion);
       if (match && match[1]) {
         return match[1];
       }
     }
-    return formato === 'png' ? 'factura.png' : 'factura.pdf';
+    return 'factura.pdf';
   }
 
   function mostrarErrorServidor(mensaje){
