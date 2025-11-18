@@ -1,7 +1,6 @@
 # generar_factura.py
 import io
 import os
-import textwrap
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -41,8 +40,10 @@ PAGE_WIDTH, PAGE_HEIGHT = letter
 _TEXT_X = 150
 _RIGHT_MARGIN = 36
 _MAX_TEXT_WIDTH = PAGE_WIDTH - _RIGHT_MARGIN - _TEXT_X  # ancho disponible a la derecha del logo
-_IMAGE_WIDTH = 850
-_IMAGE_HEIGHT = 1100
+# Escala de la versión PNG respecto a la carta (en puntos)
+_PNG_SCALE = 2
+_IMAGE_WIDTH = int(PAGE_WIDTH * _PNG_SCALE)
+_IMAGE_HEIGHT = int(PAGE_HEIGHT * _PNG_SCALE)
 
 # =========================
 # Utilidades de dibujo
@@ -255,12 +256,20 @@ def _wrap_for_width(draw, text, font, max_width):
     return lines or [text]
 
 
+def _text_height(font, extra=6):
+    """Calcula la altura aproximada de una línea para el font indicado."""
+    bbox = font.getbbox("Ag")
+    return (bbox[3] - bbox[1]) + extra
+
+
 def generar_imagen_factura(cliente, estado, fecha, productos, tema="A", pago_parcial=0.0):
+    """Genera una imagen con composición similar al PDF para mantener consistencia."""
+
     theme = THEMES.get(tema.upper(), THEMES["A"])
     img = Image.new("RGB", (_IMAGE_WIDTH, _IMAGE_HEIGHT), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font = _load_font(46, bold=True)
+    title_font = _load_font(42, bold=True)
     subtitle_font = _load_font(24)
     body_font = _load_font(24)
     bold_font = _load_font(24, bold=True)
@@ -270,85 +279,105 @@ def generar_imagen_factura(cliente, estado, fecha, productos, tema="A", pago_par
     accent = _color_to_rgb(theme.get("accent"), (51, 65, 85))
     note_color = _color_to_rgb(theme.get("note"), (55, 65, 81))
 
-    # Logo
+    padding = int(36 * _PNG_SCALE)
+    col_desc = int(50 * _PNG_SCALE)
+    col_qty = int(300 * _PNG_SCALE)
+    col_price = int(420 * _PNG_SCALE)
+    col_total = int(500 * _PNG_SCALE)
+    table_right = _IMAGE_WIDTH - padding
+
+    # Logo y cabecera
+    logo_x = int(40 * _PNG_SCALE)
+    logo_y = int(40 * _PNG_SCALE)
+    logo_box = int(90 * _PNG_SCALE)
+    text_x = logo_x + logo_box + int(32 * _PNG_SCALE)
+    y = logo_y
+
     logo_path = theme.get("logo")
     if logo_path and os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((220, 220))
-            img.paste(logo, (60, 40), logo)
+            logo = logo.resize((logo_box, logo_box), Image.LANCZOS)
+            img.paste(logo, (logo_x, logo_y), logo)
         except Exception:
             pass
+    else:
+        draw.rectangle([logo_x, logo_y, logo_x + logo_box, logo_y + logo_box], outline=(210, 210, 210), width=3)
 
-    text_x = 320
-    draw.text((text_x, 50), theme.get("title", ""), fill=primary, font=title_font)
+    draw.text((text_x, y), theme.get("title", ""), fill=primary, font=title_font)
+    y += _text_height(title_font)
 
-    y = 120
+    info_width = _IMAGE_WIDTH - text_x - padding
     direccion = f"Dirección: {theme.get('address', '')}"
     telefono = f"Teléfono: {theme.get('phone', '')}"
-    for line in _wrap_for_width(draw, direccion, subtitle_font, _IMAGE_WIDTH - text_x - 60):
+    for line in _wrap_for_width(draw, direccion, subtitle_font, info_width):
         draw.text((text_x, y), line, fill=(55, 65, 81), font=subtitle_font)
-        y += 30
-    for line in _wrap_for_width(draw, telefono, subtitle_font, _IMAGE_WIDTH - text_x - 60):
+        y += _text_height(subtitle_font, extra=4)
+    for line in _wrap_for_width(draw, telefono, subtitle_font, info_width):
         draw.text((text_x, y), line, fill=(55, 65, 81), font=subtitle_font)
-        y += 30
+        y += _text_height(subtitle_font, extra=4)
+
+    y = max(y, logo_y + logo_box) + int(32 * _PNG_SCALE)
 
     # Datos del cliente
-    y = 260
-    draw.text((60, y), f"FECHA: {fecha}", font=bold_font, fill=accent)
-    y += 35
-    draw.text((60, y), f"CLIENTE: {cliente}", font=bold_font, fill=accent)
-    y += 35
-    draw.text((60, y), f"ESTADO: {estado}", font=bold_font, fill=accent)
-    y += 45
+    draw.text((col_desc, y), f"FECHA: {fecha}", font=bold_font, fill=accent)
+    y += _text_height(bold_font, extra=6)
+    draw.text((col_desc, y), f"CLIENTE: {cliente}", font=bold_font, fill=accent)
+    y += _text_height(bold_font, extra=6)
+    draw.text((col_desc, y), f"ESTADO: {estado}", font=bold_font, fill=accent)
+    y += _text_height(bold_font, extra=12)
 
     # Cabecera tabla
-    draw.line((50, y, _IMAGE_WIDTH - 60, y), fill=primary, width=3)
-    y += 10
-    draw.text((60, y), "DESCRIPCIÓN", font=bold_font, fill=primary)
-    _draw_right(draw, "CANTIDAD", _IMAGE_WIDTH - 440, y, bold_font, primary)
-    _draw_right(draw, "PRECIO", _IMAGE_WIDTH - 260, y, bold_font, primary)
-    _draw_right(draw, "TOTAL", _IMAGE_WIDTH - 80, y, bold_font, primary)
-    y += 35
-    draw.line((50, y, _IMAGE_WIDTH - 60, y), fill=primary, width=2)
-    y += 15
+    draw.line((col_desc, y, table_right, y), fill=primary, width=3)
+    y += int(10 * _PNG_SCALE)
+    draw.text((col_desc, y), "DESCRIPCIÓN", font=bold_font, fill=primary)
+    _draw_right(draw, "CANTIDAD", col_qty + int(20 * _PNG_SCALE), y, bold_font, primary)
+    _draw_right(draw, "PRECIO", col_price + int(50 * _PNG_SCALE), y, bold_font, primary)
+    _draw_right(draw, "TOTAL", col_total + int(80 * _PNG_SCALE), y, bold_font, primary)
+    y += _text_height(bold_font, extra=12)
+    draw.line((col_desc, y, table_right, y), fill=primary, width=2)
+    y += int(15 * _PNG_SCALE)
 
     total_factura = 0
+    descripcion_ancho = col_qty - col_desc - int(20 * _PNG_SCALE)
+    linea_altura = _text_height(body_font, extra=8)
+
     for cantidad, descripcion, precio, total in productos:
-        desc = textwrap.shorten(_cap(descripcion), width=160, placeholder="...")
-        lineas_desc = _wrap_for_width(draw, desc, body_font, 460)
+        lineas_desc = _wrap_for_width(draw, _cap(descripcion), body_font, descripcion_ancho)
         for idx, line in enumerate(lineas_desc):
-            draw.text((60, y), line, font=body_font, fill=(31, 41, 55))
+            draw.text((col_desc, y), line, font=body_font, fill=(31, 41, 55))
             if idx == 0:
-                _draw_right(draw, str(cantidad), _IMAGE_WIDTH - 420, y, body_font, (31, 41, 55))
-                _draw_right(draw, f"Q {precio:,.2f}", _IMAGE_WIDTH - 240, y, body_font, (31, 41, 55))
-                _draw_right(draw, f"Q {total:,.2f}", _IMAGE_WIDTH - 60, y, body_font, (31, 41, 55))
-            y += 32
+                _draw_right(draw, str(cantidad), col_qty, y, body_font, (31, 41, 55))
+                _draw_right(draw, f"Q {precio:,.2f}", col_price + int(60 * _PNG_SCALE), y, body_font, (31, 41, 55))
+                _draw_right(draw, f"Q {total:,.2f}", col_total + int(100 * _PNG_SCALE), y, body_font, (31, 41, 55))
+            y += linea_altura
         total_factura += total
-        draw.line((50, y - 10, _IMAGE_WIDTH - 60, y - 10), fill=(226, 232, 240), width=1)
-        if y > _IMAGE_HEIGHT - 260:
+        draw.line((col_desc, y - 6, table_right, y - 6), fill=(226, 232, 240), width=2)
+        y += int(4 * _PNG_SCALE)
+        if y > _IMAGE_HEIGHT - int(200 * _PNG_SCALE):
             break
 
     # Totales
-    y += 30
-    draw.text((60, y), "TOTAL:", font=bold_font, fill=primary)
-    _draw_right(draw, f"Q {total_factura:,.2f}", _IMAGE_WIDTH - 60, y, bold_font, primary)
-    y += 40
+    y += int(10 * _PNG_SCALE)
+    draw.text((col_desc, y), "TOTAL:", font=bold_font, fill=primary)
+    _draw_right(draw, f"Q {total_factura:,.2f}", col_total + int(100 * _PNG_SCALE), y, bold_font, primary)
+    y += _text_height(bold_font, extra=12)
 
     if pago_parcial:
         saldo = max(total_factura - pago_parcial, 0)
-        draw.text((60, y), "Pago parcial:", font=body_font, fill=accent)
-        _draw_right(draw, f"Q {pago_parcial:,.2f}", _IMAGE_WIDTH - 60, y, body_font, accent)
-        y += 30
-        draw.text((60, y), "Saldo pendiente:", font=body_font, fill=accent)
-        _draw_right(draw, f"Q {saldo:,.2f}", _IMAGE_WIDTH - 60, y, body_font, accent)
-        y += 40
+        draw.text((col_desc, y), "Pago parcial:", font=body_font, fill=accent)
+        _draw_right(draw, f"Q {pago_parcial:,.2f}", col_total + int(100 * _PNG_SCALE), y, body_font, accent)
+        y += linea_altura
+        draw.text((col_desc, y), "Saldo pendiente:", font=body_font, fill=accent)
+        _draw_right(draw, f"Q {saldo:,.2f}", col_total + int(100 * _PNG_SCALE), y, body_font, accent)
+        y += linea_altura
 
-    draw.text((60, y), "(Factura no contable con fines informativos.)", font=small_font, fill=note_color)
-    y += 28
-    draw.text((60, y), "¡Gracias por su compra, vuelva pronto!", font=small_font, fill=note_color)
+    draw.text((col_desc, y), "(Factura no contable con fines informativos.)", font=small_font, fill=note_color)
+    y += _text_height(small_font, extra=8)
+    draw.text((col_desc, y), "¡Gracias por su compra, vuelva pronto!", font=small_font, fill=note_color)
+    y += _text_height(small_font, extra=12)
 
-    contenido_util = min(max(int(y + 80), 520), _IMAGE_HEIGHT)
+    contenido_util = min(max(int(y + 40), int(520 * _PNG_SCALE)), _IMAGE_HEIGHT)
     if contenido_util < _IMAGE_HEIGHT:
         img = img.crop((0, 0, _IMAGE_WIDTH, contenido_util))
 
