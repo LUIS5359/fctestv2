@@ -9,26 +9,26 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Cabinet+Grotesk:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg:         #07090f;
-      --surface:    #0c1018;
-      --surface-2:  #101520;
-      --surface-3:  #141c28;
-      --border:     #182030;
-      --border-hi:  #1e2a3a;
-      --text:       #c8d6e8;
-      --text-dim:   #6a7d94;
-      --text-muted: #3d5068;
-      --accent:     #3ddc97;
-      --accent-dim: rgba(61,220,151,.12);
-      --accent-ring:rgba(61,220,151,.22);
-      --blue:       #5b9cf6;
-      --blue-dim:   rgba(91,156,246,.12);
-      --blue-ring:  rgba(91,156,246,.22);
-      --red:        #f05d7a;
-      --red-dim:    rgba(240,93,122,.1);
-      --r:          8px;
-      --r-lg:       14px;
-      --r-xl:       20px;
+      --bg:          #07090f;
+      --surface:     #0c1018;
+      --surface-2:   #101520;
+      --surface-3:   #141c28;
+      --border:      #182030;
+      --border-hi:   #1e2a3a;
+      --text:        #c8d6e8;
+      --text-dim:    #6a7d94;
+      --text-muted:  #3d5068;
+      --accent:      #3ddc97;
+      --accent-dim:  rgba(61,220,151,.12);
+      --accent-ring: rgba(61,220,151,.22);
+      --blue:        #5b9cf6;
+      --blue-dim:    rgba(91,156,246,.12);
+      --blue-ring:   rgba(91,156,246,.22);
+      --red:         #f05d7a;
+      --red-dim:     rgba(240,93,122,.1);
+      --r:           8px;
+      --r-lg:        14px;
+      --r-xl:        20px;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -162,7 +162,9 @@
     /* ── GRID & FIELDS ── */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .field { display: flex; flex-direction: column; gap: 7px; }
-    .field-label {
+    .hidden { display: none !important; }
+
+    label {
       font-size: .75rem;
       font-weight: 700;
       letter-spacing: .06em;
@@ -210,7 +212,6 @@
       min-height: 148px;
       resize: vertical;
     }
-    .hidden { display: none !important; }
 
     /* ── PREVIEW ── */
     .preview-wrap {
@@ -247,6 +248,7 @@
       border-radius: 999px;
     }
     .preview-body { padding: 14px 18px; }
+    /* Clases originales del JS — no renombrar */
     .preview-list { display: flex; flex-direction: column; }
     .preview-item {
       display: flex;
@@ -265,7 +267,7 @@
       font-size: .9rem;
       font-weight: 500;
     }
-    .badge-qty {
+    .preview-qty {
       font-family: 'DM Mono', monospace;
       font-size: .76rem;
       color: var(--accent);
@@ -282,16 +284,17 @@
       font-family: 'DM Mono', monospace;
       font-size: .78rem;
       line-height: 1.6;
+      color: var(--text-muted);
     }
-    .preview-prices .unit { color: var(--text-muted); }
-    .preview-prices .subtotal { color: var(--text); font-weight: 500; }
-    .preview-empty {
+    .preview-line-total { color: var(--text); font-weight: 500; }
+    .preview-empty-text {
       color: var(--text-muted);
       font-size: .85rem;
       font-style: italic;
       padding: 6px 0 2px;
+      margin: 0;
     }
-    .preview-errs {
+    .preview-errors {
       margin-top: 10px;
       font-family: 'DM Mono', monospace;
       font-size: .75rem;
@@ -326,8 +329,8 @@
     }
     .format-lines span { color: var(--accent); opacity: .85; }
 
-    /* ── ERRORS ── */
-    .errors-box {
+    /* ── ERRORS — clase original "errors" ── */
+    .errors {
       display: none;
       margin: 0 36px;
       border-radius: var(--r);
@@ -337,7 +340,7 @@
       font-size: .875rem;
       color: #ffb3bf;
     }
-    .errors-box ul { padding-left: 18px; line-height: 2; }
+    .errors ul { padding-left: 18px; line-height: 2; margin: 0; }
 
     /* ── ACTIONS ── */
     .actions-sec { padding: 28px 36px 34px; }
@@ -346,14 +349,13 @@
       color: var(--text-dim);
       margin-bottom: 20px;
       line-height: 1.65;
-      max-width: 520px;
     }
     .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
 
+    /* Clases originales: btn local1 / btn local2 */
     .btn {
       appearance: none;
       cursor: pointer;
-      border: none;
       border-radius: var(--r);
       padding: 13px 26px;
       font-family: 'Cabinet Grotesk', sans-serif;
@@ -365,28 +367,26 @@
       align-items: center;
       gap: 8px;
     }
-    .btn svg { flex-shrink: 0; transition: transform .2s ease; }
-    .btn:hover:not(:disabled) svg { transform: translateY(1px); }
     .btn:active { transform: scale(.97); }
     .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
-    .btn-1 {
+    .btn.local1 {
       background: linear-gradient(135deg, rgba(61,220,151,.28) 0%, rgba(61,220,151,.1) 100%);
       color: #5dffc0;
       border: 1px solid rgba(61,220,151,.38);
       box-shadow: 0 0 28px -8px rgba(61,220,151,.4);
     }
-    .btn-1:hover:not(:disabled) {
+    .btn.local1:hover:not(:disabled) {
       box-shadow: 0 0 36px -4px rgba(61,220,151,.5);
       border-color: rgba(61,220,151,.6);
     }
-    .btn-2 {
+    .btn.local2 {
       background: linear-gradient(135deg, rgba(91,156,246,.28) 0%, rgba(91,156,246,.1) 100%);
       color: #8bbdff;
       border: 1px solid rgba(91,156,246,.38);
       box-shadow: 0 0 28px -8px rgba(91,156,246,.4);
     }
-    .btn-2:hover:not(:disabled) {
+    .btn.local2:hover:not(:disabled) {
       box-shadow: 0 0 36px -4px rgba(91,156,246,.5);
       border-color: rgba(91,156,246,.6);
     }
@@ -399,7 +399,7 @@
       .sec { padding: 22px 18px; }
       .sec-info::before { display: none; }
       .grid-2 { grid-template-columns: 1fr; }
-      .errors-box { margin: 0 18px; }
+      .errors { margin: 0 18px; }
       .actions-sec { padding: 22px 18px 28px; }
       .btn-row { flex-direction: column; }
       .btn { width: 100%; justify-content: center; }
@@ -424,7 +424,8 @@
   </div>
 
   <div class="card">
-    <form action="/generar_desde_texto" method="POST" target="_blank" id="comprobanteForm">
+    <!-- id del form igual al original: facturaForm -->
+    <form action="/generar_desde_texto" method="POST" target="_blank" id="facturaForm">
 
       <!-- § INFORMACIÓN -->
       <div class="sec sec-info">
@@ -434,11 +435,11 @@
         </div>
         <div class="grid-2">
           <div class="field">
-            <label class="field-label" for="cliente">Cliente</label>
+            <label for="cliente">Cliente</label>
             <input type="text" id="cliente" name="cliente" placeholder="Nombre del cliente" />
           </div>
           <div class="field">
-            <label class="field-label" for="fecha">Fecha</label>
+            <label for="fecha">Fecha</label>
             <input type="date" id="fecha" name="fecha" />
           </div>
         </div>
@@ -452,9 +453,9 @@
         </div>
         <div class="grid-2">
           <div class="field">
-            <label class="field-label" for="estado">Estado</label>
+            <label for="estado">Estado</label>
             <select id="estado" name="estado">
-              <option value="">Selecciona un estado</option>
+              <option value="">Selecciona una opción</option>
               <option value="PAGADO">✓  Pagado</option>
               <option value="PENDIENTE">⏳  Pendiente</option>
               <option value="PAGO PARCIAL">◑  Pago parcial</option>
@@ -462,8 +463,9 @@
               <option value="RECIBIDO">✔  Recibido</option>
             </select>
           </div>
+          <!-- id y name originales conservados -->
           <div class="field hidden" id="pagoParcialField">
-            <label class="field-label" for="montoParcial">Monto pagado (Q)</label>
+            <label for="montoParcial">Monto pago parcial</label>
             <input type="number" step="0.01" min="0" id="montoParcial" name="monto_parcial" placeholder="0.00" />
           </div>
         </div>
@@ -477,21 +479,25 @@
         </div>
 
         <div class="field">
-          <label class="field-label" for="productos">Productos</label>
+          <label for="productos">Productos</label>
           <textarea id="productos" name="productos" spellcheck="false"
             placeholder="3 pelota gloria a 65&#10;2 guante buffon paleta a 175&#10;1 pelota milan pro a 240"></textarea>
         </div>
 
+        <!-- id original: previewContainer -->
         <div class="preview-wrap" id="previewContainer">
           <div class="preview-bar">
             <span class="preview-bar-label">Vista previa</span>
+            <!-- id original: previewTotal -->
             <span class="preview-total-badge" id="previewTotal">Total: Q0.00</span>
           </div>
           <div class="preview-body">
+            <!-- id original: previewList -->
             <div id="previewList" class="preview-list">
-              <p class="preview-empty">Escribe productos con el formato "[cantidad] [nombre] a [precio]" para ver el desglose.</p>
+              <p class="preview-empty-text">Escribe productos con el formato "[cantidad] [nombre] a [precio]" para ver el desglose.</p>
             </div>
-            <div id="previewErrors" class="preview-errs hidden"></div>
+            <!-- clase original: preview-errors; id original: previewErrors -->
+            <div id="previewErrors" class="preview-errors hidden"></div>
           </div>
         </div>
 
@@ -508,24 +514,26 @@
         </div>
       </div>
 
-      <!-- ERRORES -->
-      <div class="errors-box" id="errores"></div>
+      <!-- ERRORES — clase original: errors; id original: errores -->
+      <div class="errors" id="errores"></div>
 
+      <!-- Campo oculto original -->
       <input type="hidden" name="plantilla" id="plantilla" value="A" />
 
       <!-- ACCIONES -->
       <div class="actions-sec">
         <p class="actions-hint">Completa los campos, revisa la vista previa y selecciona el local para descargar el comprobante en PDF.</p>
         <div class="btn-row">
-          <button type="button" class="btn btn-1" onclick="iniciarDescarga(event,'A')">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Clases originales: btn local1 / btn local2; onclick original intacto -->
+          <button type="button" class="btn local1" onclick="iniciarDescarga(event,'A')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             Local 1
           </button>
-          <button type="button" class="btn btn-2" onclick="iniciarDescarga(event,'B')">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <button type="button" class="btn local2" onclick="iniciarDescarga(event,'B')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             Local 2
           </button>
@@ -536,122 +544,155 @@
   </div>
 </div>
 
+<!-- ============================================================
+     SCRIPT ORIGINAL — sin modificaciones
+     ============================================================ -->
 <script>
-  const currencyFormatter = new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ' });
-  const form             = document.getElementById('comprobanteForm');
-  const estadoSelect     = document.getElementById('estado');
+  const form = document.getElementById('facturaForm');
+  const erroresBox = document.getElementById('errores');
+  const fechaInput = document.getElementById('fecha');
+  const estadoSelect = document.getElementById('estado');
   const pagoParcialField = document.getElementById('pagoParcialField');
   const pagoParcialInput = document.getElementById('montoParcial');
-  const productosTA      = document.getElementById('productos');
-  const erroresBox       = document.getElementById('errores');
-  const previewList      = document.getElementById('previewList');
-  const previewTotal     = document.getElementById('previewTotal');
-  const previewErrors    = document.getElementById('previewErrors');
-  const fechaInput       = document.getElementById('fecha');
+  const productosTextarea = document.getElementById('productos');
+  const previewList = document.getElementById('previewList');
+  const previewTotal = document.getElementById('previewTotal');
+  const previewErrors = document.getElementById('previewErrors');
+  const currencyFormatter = new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ' });
 
-  // Fecha de hoy por defecto
-  if (!fechaInput.value) {
-    const t = new Date();
-    fechaInput.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-  }
+  fechaInput.valueAsDate = new Date();
 
-  estadoSelect.addEventListener('change', function () {
-    if (this.value === 'PAGO PARCIAL') {
-      pagoParcialField.classList.remove('hidden');
-    } else {
-      pagoParcialField.classList.add('hidden');
+  estadoSelect.addEventListener('change', () => {
+    const show = estadoSelect.value === 'PAGO PARCIAL';
+    pagoParcialField.classList.toggle('hidden', !show);
+    if (!show) {
       pagoParcialInput.value = '';
     }
   });
 
-  productosTA.addEventListener('input', actualizarPreview);
+  productosTextarea.addEventListener('input', actualizarPreview);
   actualizarPreview();
-  form.addEventListener('submit', e => { e.preventDefault(); validarFormulario(); });
 
-  function validarFormulario() {
+  form.addEventListener('submit', function(evt){
+    evt.preventDefault();
+    validarFormulario();
+  });
+
+  function validarFormulario(){
     const cliente = (document.getElementById('cliente').value || '').trim();
-    const fecha   = fechaInput.value;
-    const estado  = estadoSelect.value;
-    const texto   = (productosTA.value || '').trim();
-    const parcial = pagoParcialInput.value;
-    const errs    = [];
+    const fecha = fechaInput.value;
+    const estado = estadoSelect.value;
+    const productosTexto = (productosTextarea.value || '').trim();
+    const pagoParcial = pagoParcialInput.value;
+    const errores = [];
+    let lineasProductos = [];
 
-    if (!cliente) errs.push('Agrega el nombre del cliente.');
-    if (!fecha)   errs.push('Selecciona una fecha.');
-    if (!estado)  errs.push('Selecciona un estado para el pedido.');
-    if (!texto) {
-      errs.push('Agrega al menos un producto.');
-    } else {
-      const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean);
-      if (lineas.find(l => !parseLinea(l)))
-        errs.push('Usa el formato "[cantidad] [nombre] a [precio]" en cada línea.');
+    if (!cliente) {
+      errores.push('Agrega el nombre del cliente.');
     }
-    if (estado === 'PAGO PARCIAL' && (!parcial || Number(parcial) <= 0))
-      errs.push('Indica el monto del pago parcial.');
+    if (!fecha) {
+      errores.push('Selecciona una fecha.');
+    }
+    if (!estado) {
+      errores.push('Selecciona un estado para el pedido.');
+    }
+    if (!productosTexto) {
+      errores.push('Agrega al menos un producto.');
+    } else {
+      lineasProductos = productosTexto.split('\n').map(linea => linea.trim()).filter(Boolean);
+      const lineaInvalida = lineasProductos.find(linea => !parseLineaProducto(linea));
+      if (lineaInvalida) {
+        errores.push('Sigue el formato "3 pelota gloria a 65" en cada línea.');
+      }
+    }
+    if (estado === 'PAGO PARCIAL') {
+      if (!pagoParcial || Number(pagoParcial) <= 0) {
+        errores.push('Indica el monto del pago parcial.');
+      }
+    }
 
-    if (errs.length) {
-      erroresBox.innerHTML = '<ul><li>' + errs.join('</li><li>') + '</li></ul>';
+    if (errores.length) {
+      erroresBox.innerHTML = '<ul><li>' + errores.join('</li><li>') + '</li></ul>';
       erroresBox.style.display = 'block';
-      erroresBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return false;
     }
     erroresBox.style.display = 'none';
     return true;
   }
 
-  function parseLinea(linea) {
-    if (!linea) return null;
-    const priceRx = /([\$qQ]?\s*\d+(?:[.,]\d+)?)(?:\s*(?:c\/u|cada\s+uno|unidad|u))?$/i;
-    const match = priceRx.exec(linea);
-    if (!match) return null;
-    const precioRaw = match[1];
-    const antes = linea.slice(0, match.index).trim();
-    const partes = antes.split(/\s+/);
-    if (!partes.length) return null;
-    const cantTok = partes.shift();
-    if (!/^\d+$/.test(cantTok)) return null;
-    let desc = partes.join(' ').trim().replace(/\s+(?:a|x|por|precio|cada|c\/u)\s*$/i, '').trim();
-    if (!desc) return null;
-    const precio = parseFloat(precioRaw.replace(/[Qq$]/g,'').replace(/\s+/g,'').replace(',','.'));
-    if (!Number.isFinite(precio)) return null;
-    const qty = parseInt(cantTok, 10);
-    return { qty, description: desc, price: precio, total: qty * precio };
+  function formatearMoneda(valor) {
+    if (!Number.isFinite(valor)) {
+      return currencyFormatter.format(0);
+    }
+    return currencyFormatter.format(valor);
   }
 
-  const fmt = v => Number.isFinite(v) ? currencyFormatter.format(v) : currencyFormatter.format(0);
-  const esc = t => t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function escaparHtml(texto) {
+    const mapa = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return texto.replace(/[&<>"']/g, (char) => mapa[char]);
+  }
+
+  function parseLineaProducto(linea) {
+    if (!linea) return null;
+    const priceRegex = /([\$qQ]?\s*\d+(?:[.,]\d+)?)(?:\s*(?:c\/u|cada\s+uno|unidad|u))?$/i;
+    const match = priceRegex.exec(linea);
+    if (!match) return null;
+    const precioRaw = match[1];
+    const antesDelPrecio = linea.slice(0, match.index).trim();
+    const partes = antesDelPrecio.split(/\s+/);
+    if (!partes.length) return null;
+    const cantidadToken = partes.shift();
+    if (!/^\d+$/.test(cantidadToken)) return null;
+    let descripcion = partes.join(' ').trim();
+    descripcion = descripcion.replace(/\s+(?:a|x|por|precio|cada|c\/u)\s*$/i, '').trim();
+    if (!descripcion) return null;
+    const precioNormalizado = precioRaw.replace(/[Qq$]/g, '').replace(/\s+/g, '').replace(',', '.');
+    const precio = parseFloat(precioNormalizado);
+    if (!Number.isFinite(precio)) return null;
+    const cantidad = parseInt(cantidadToken, 10);
+    return {
+      qty: cantidad,
+      description: descripcion,
+      price: precio,
+      total: cantidad * precio
+    };
+  }
 
   function actualizarPreview() {
-    const texto  = (productosTA.value || '').trim();
-    const lineas = texto ? texto.split('\n').map(l => l.trim()).filter(Boolean) : [];
+    const texto = (productosTextarea.value || '').trim();
+    const lineas = texto ? texto.split('\n').map(linea => linea.trim()).filter(Boolean) : [];
     let total = 0;
-    const frags = [], errs = [];
+    const fragmentos = [];
+    const erroresLocales = [];
 
-    lineas.forEach((linea, i) => {
-      const d = parseLinea(linea);
-      if (!d) { errs.push(`Línea ${i+1}: formato incorrecto.`); return; }
-      total += d.total;
-      frags.push(`
+    lineas.forEach((linea, indice) => {
+      const data = parseLineaProducto(linea);
+      if (!data) {
+        erroresLocales.push(`Línea ${indice + 1}: usa "3 pelota gloria a 65".`);
+        return;
+      }
+      total += data.total;
+      fragmentos.push(`
         <div class="preview-item">
-          <div class="preview-desc">
-            <span class="badge-qty">${d.qty}×</span>
-            ${esc(d.description)}
-          </div>
+          <div class="preview-desc"><span class="preview-qty">${data.qty}×</span> ${escaparHtml(data.description)}</div>
           <div class="preview-prices">
-            <div class="unit">${fmt(d.price)} c/u</div>
-            <div class="subtotal">${fmt(d.total)}</div>
+            <div>${formatearMoneda(data.price)} c/u</div>
+            <div class="preview-line-total">${formatearMoneda(data.total)}</div>
           </div>
-        </div>`);
+        </div>
+      `);
     });
 
-    previewList.innerHTML = frags.length
-      ? frags.join('')
-      : '<p class="preview-empty">Escribe productos con el formato "[cantidad] [nombre] a [precio]" para ver el desglose.</p>';
+    if (!fragmentos.length) {
+      previewList.innerHTML = '<p class="preview-empty-text">Escribe productos con el formato "[cantidad] [nombre] a [precio]" para ver el desglose.</p>';
+    } else {
+      previewList.innerHTML = fragmentos.join('');
+    }
 
-    previewTotal.textContent = `Total: ${fmt(total)}`;
+    previewTotal.textContent = `Total: ${formatearMoneda(total)}`;
 
-    if (errs.length) {
-      previewErrors.innerHTML = errs.join('<br>');
+    if (erroresLocales.length) {
+      previewErrors.innerHTML = erroresLocales.join('<br>');
       previewErrors.classList.remove('hidden');
     } else {
       previewErrors.innerHTML = '';
@@ -659,59 +700,73 @@
     }
   }
 
-  async function iniciarDescarga(evt, tipo) {
+  async function iniciarDescarga(evt, tipo){
     evt.preventDefault();
     document.getElementById('plantilla').value = tipo;
-    if (!validarFormulario()) return;
+    if (!validarFormulario()) {
+      return;
+    }
     await descargarPdf();
   }
 
-  async function descargarPdf() {
-    toggleBtns(true);
-    try { await solicitarPdf(); }
-    catch (err) { mostrarError(err.message || 'Error al generar el comprobante.'); }
-    finally { toggleBtns(false); }
+  async function descargarPdf(){
+    toggleBotones(true);
+    try {
+      await solicitarPdf();
+    } catch (error) {
+      mostrarErrorServidor(error.message || 'Ocurrió un error al generar los archivos.');
+    } finally {
+      toggleBotones(false);
+    }
   }
 
-  const svgDown = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const svgSpin = `<svg width="14" height="14" viewBox="0 0 14 14" style="animation:spin .8s linear infinite" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.6" stroke-dasharray="22" stroke-dashoffset="8" stroke-linecap="round"/></svg>`;
-
-  function toggleBtns(off) {
-    document.querySelectorAll('.btn-1, .btn-2').forEach(b => {
-      b.disabled = off;
-      b.innerHTML = off
-        ? `${svgSpin} Generando…`
-        : `${svgDown} ${b.classList.contains('btn-1') ? 'Local 1' : 'Local 2'}`;
+  function toggleBotones(desactivar){
+    document.querySelectorAll('.btn.local1, .btn.local2').forEach(btn => {
+      btn.disabled = desactivar;
+      btn.textContent = desactivar ? 'Generando…' : (btn.classList.contains('local1') ? 'Local 1' : 'Local 2');
     });
   }
 
-  async function solicitarPdf() {
-    const fd = new FormData(form);
-    fd.set('formato', 'pdf');
-    const res = await fetch(form.action, { method: 'POST', body: fd });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error((txt || 'Error al generar el archivo').replace(/^❌\s*/, ''));
+  async function solicitarPdf(){
+    const formData = new FormData(form);
+    formData.set('formato', 'pdf');
+    const respuesta = await fetch(form.action, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!respuesta.ok) {
+      const texto = await respuesta.text();
+      throw new Error((texto || 'Error al generar el archivo').replace(/^❌\s*/, ''));
     }
-    const blob = await res.blob();
-    const cd = res.headers.get('Content-Disposition');
-    let name = 'comprobante.pdf';
-    if (cd) { const m = /filename="?([^";]+)"?/i.exec(cd); if (m?.[1]) name = m[1]; }
+
+    const blob = await respuesta.blob();
+    const filename = obtenerNombreArchivo(respuesta.headers.get('Content-Disposition'));
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = filename;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function mostrarError(msg) {
-    erroresBox.innerHTML = '<ul><li>' + msg + '</li></ul>';
-    erroresBox.style.display = 'block';
+  function obtenerNombreArchivo(disposicion){
+    if (disposicion){
+      const match = /filename="?([^";]+)"?/i.exec(disposicion);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return 'factura.pdf';
   }
 
-  const s = document.createElement('style');
-  s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-  document.head.appendChild(s);
+  function mostrarErrorServidor(mensaje){
+    erroresBox.innerHTML = '<ul><li>' + mensaje + '</li></ul>';
+    erroresBox.style.display = 'block';
+  }
 </script>
+
 </body>
 </html>
